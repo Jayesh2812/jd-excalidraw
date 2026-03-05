@@ -371,7 +371,10 @@ export function CanvasEditor() {
           key={excalidrawKey}
           initialData={{
             elements: canvasData?.elements || [],
-            appState: canvasData?.appState || {},
+            appState: {
+              ...canvasData?.appState,
+              theme: 'dark',
+            },
             files: canvasData?.files || {},
           }}
           onChange={(elements, appState, files) => {

@@ -61,8 +61,8 @@
   font-size: 16px;
   font-weight: 500;
   color: #333;
-  background: white;
-  border: 1px solid #ddd;
+  background: #f8f9fa;
+  border: none;
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
@@ -70,7 +70,7 @@
 }
 
 .login-page__google-button:hover {
-  border-color: #ccc;
+  background: #f1f3f5;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
   transform: translateY(-1px);
 }

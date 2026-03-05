@@ -5,6 +5,7 @@ import '@excalidraw/excalidraw/index.css'
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
+import { VersionHistory, SaveVersionButton } from './VersionHistory'
 import './CanvasEditor.css'
 
 interface CanvasData {
@@ -26,10 +27,13 @@ export function CanvasEditor() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'idle'>('idle')
+  const [isVersionSidebarOpen, setIsVersionSidebarOpen] = useState(false)
+  const [excalidrawKey, setExcalidrawKey] = useState(0) // Key to force re-render Excalidraw
   
   // Refs for hybrid throttle + debounce
   const lastSavedHashRef = useRef<string>('')
   const pendingStateRef = useRef<string | null>(null)
+  const currentContentRef = useRef<string>('') // Track current content for version saving
   const lastSaveTimeRef = useRef<number>(0)
   const debounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const throttleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -98,6 +102,9 @@ export function CanvasEditor() {
       // Get saveable state (excludes transient properties)
       const saveableState = getSaveableState(elements, appState, files)
       const stateHash = JSON.stringify(saveableState)
+      
+      // Always update current content ref for version saving
+      currentContentRef.current = stateHash
       
       // Check if there are actual changes worth saving
       if (stateHash === lastSavedHashRef.current) {
@@ -193,12 +200,14 @@ export function CanvasEditor() {
           }
           
           setCanvasData(canvasContent)
-          // Initialize last saved reference to prevent immediate re-save
-          lastSavedHashRef.current = JSON.stringify({
+          // Initialize refs
+          const contentHash = JSON.stringify({
             elements: canvasContent.elements,
             appState: canvasContent.appState,
             files: canvasContent.files,
           })
+          lastSavedHashRef.current = contentHash
+          currentContentRef.current = contentHash
         } else {
           setError('Canvas not found')
         }
@@ -257,6 +266,48 @@ export function CanvasEditor() {
     navigate('/')
   }, [navigate])
 
+  // Handle restoring a version
+  const handleRestoreVersion = useCallback(async (content: string) => {
+    try {
+      const parsed = JSON.parse(content)
+      
+      // Update canvas data to trigger re-render
+      setCanvasData(prev => ({
+        name: prev?.name || 'Untitled',
+        elements: parsed.elements || [],
+        appState: parsed.appState || {},
+        files: parsed.files || {},
+      }))
+      
+      // Update refs
+      lastSavedHashRef.current = content
+      currentContentRef.current = content
+      hasUnsavedChangesRef.current = false
+      
+      // Force Excalidraw to re-render with new data
+      setExcalidrawKey(prev => prev + 1)
+      
+      // Save the restored version to main document
+      if (user && canvasId) {
+        const docRef = doc(db, 'users', user.uid, 'canvases', canvasId)
+        await updateDoc(docRef, {
+          content: content,
+          updatedAt: serverTimestamp(),
+        })
+      }
+      
+      // Close sidebar
+      setIsVersionSidebarOpen(false)
+    } catch (err) {
+      console.error('Error restoring version:', err)
+    }
+  }, [user, canvasId])
+
+  // Toggle version sidebar
+  const toggleVersionSidebar = useCallback(() => {
+    setIsVersionSidebarOpen(prev => !prev)
+  }, [])
+
   if (loading) {
     return (
       <div className="canvas-editor-loading">
@@ -292,21 +343,32 @@ export function CanvasEditor() {
         <h1 className="canvas-editor__title">
           {canvasData?.name || 'Untitled'}
         </h1>
-        <div className="canvas-editor__save-status">
-          {saveStatus === 'saving' && (
-            <span className="canvas-editor__save-text canvas-editor__save-text--saving">
-              💾 Saving...
-            </span>
-          )}
-          {saveStatus === 'saved' && (
-            <span className="canvas-editor__save-text canvas-editor__save-text--saved">
-              ✓ Saved
-            </span>
-          )}
+        <div className="canvas-editor__header-actions">
+          <div className="canvas-editor__save-status">
+            {saveStatus === 'saving' && (
+              <span className="canvas-editor__save-text canvas-editor__save-text--saving">
+                💾 Saving...
+              </span>
+            )}
+            {saveStatus === 'saved' && (
+              <span className="canvas-editor__save-text canvas-editor__save-text--saved">
+                ✓ Saved
+              </span>
+            )}
+          </div>
+          <button 
+            onClick={toggleVersionSidebar}
+            className={`canvas-editor__history-button ${isVersionSidebarOpen ? 'canvas-editor__history-button--active' : ''}`}
+            title="Version History"
+          >
+            🕐 History
+          </button>
         </div>
       </header>
+      
       <div className="canvas-editor__editor-container">
         <Excalidraw
+          key={excalidrawKey}
           initialData={{
             elements: canvasData?.elements || [],
             appState: canvasData?.appState || {},
@@ -317,6 +379,23 @@ export function CanvasEditor() {
           }}
         />
       </div>
+
+      {/* Floating Save Version Button */}
+      <div className={isVersionSidebarOpen ? 'save-version-fab--shifted' : ''}>
+        <SaveVersionButton onClick={toggleVersionSidebar} />
+      </div>
+
+      {/* Version History Sidebar */}
+      {user && canvasId && (
+        <VersionHistory
+          userId={user.uid}
+          canvasId={canvasId}
+          currentContent={currentContentRef.current}
+          isOpen={isVersionSidebarOpen}
+          onClose={() => setIsVersionSidebarOpen(false)}
+          onRestore={handleRestoreVersion}
+        />
+      )}
     </div>
   )
 }

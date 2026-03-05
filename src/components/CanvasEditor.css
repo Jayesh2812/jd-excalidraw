@@ -44,10 +44,39 @@
   text-overflow: ellipsis;
 }
 
+/* Element: header-actions */
+.canvas-editor__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
 /* Element: save-status */
 .canvas-editor__save-status {
-  min-width: 100px;
+  min-width: 80px;
   text-align: right;
+}
+
+/* Element: history-button */
+.canvas-editor__history-button {
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: white;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.canvas-editor__history-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.canvas-editor__history-button--active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-color: transparent;
 }
 
 /* Element: save-text with modifiers */

@@ -7,7 +7,8 @@ import {
   LoadingOutlined,
   CheckOutlined,
 } from '@ant-design/icons'
-import { Excalidraw } from '@excalidraw/excalidraw'
+import { Excalidraw, exportToSvg } from '@excalidraw/excalidraw'
+import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import '@excalidraw/excalidraw/index.css'
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase'
@@ -41,6 +42,9 @@ export function CanvasEditor() {
   const [isEditingName, setIsEditingName] = useState(false)
   const [editedName, setEditedName] = useState('')
   const { token } = theme.useToken()
+  
+  // Excalidraw API ref for generating previews
+  const excalidrawAPIRef = useRef<ExcalidrawImperativeAPI | null>(null)
   
   // Refs for hybrid throttle + debounce
   const lastSavedHashRef = useRef<string>('')
@@ -77,6 +81,67 @@ export function CanvasEditor() {
     }
   }
 
+  // Helper to check if a color is dark
+  const isColorDark = (color: string): boolean => {
+    if (!color || color === 'transparent') return false
+    // Handle hex colors
+    const hex = color.replace('#', '')
+    if (hex.length === 6) {
+      const r = parseInt(hex.substring(0, 2), 16)
+      const g = parseInt(hex.substring(2, 4), 16)
+      const b = parseInt(hex.substring(4, 6), 16)
+      const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+      return luminance < 0.5
+    }
+    return false
+  }
+
+  // Generate SVG preview from current canvas state
+  const generatePreview = useCallback(async (): Promise<string | null> => {
+    const api = excalidrawAPIRef.current
+    if (!api) return null
+
+    try {
+      // Get only non-deleted elements
+      const allElements = api.getSceneElements()
+      const elements = allElements.filter((el: any) => !el.isDeleted)
+      const files = api.getFiles()
+      
+      // Skip preview generation if canvas is empty
+      if (!elements || elements.length === 0) return null
+
+      // Clone elements and change dark colors to light for preview
+      const previewElements = elements.map((el: any) => {
+        const clone = { ...el }
+        // If stroke color is dark, make it white
+        if (clone.strokeColor && isColorDark(clone.strokeColor)) {
+          clone.strokeColor = '#ffffff'
+        }
+        // If background color is dark (but not transparent), make it light gray
+        if (clone.backgroundColor && clone.backgroundColor !== 'transparent' && isColorDark(clone.backgroundColor)) {
+          clone.backgroundColor = '#cccccc'
+        }
+        return clone
+      })
+
+      const svg = await exportToSvg({
+        elements: previewElements,
+        appState: {
+          exportBackground: false,
+          exportPadding: 10,
+        },
+        files,
+      })
+
+      // Serialize SVG to string
+      const svgString = new XMLSerializer().serializeToString(svg)
+      return svgString
+    } catch (err) {
+      console.error('Error generating preview:', err)
+      return null
+    }
+  }, [])
+
   // Actual save function
   const performSave = useCallback(async (stateHash: string) => {
     if (!user || !canvasId) return
@@ -86,8 +151,12 @@ export function CanvasEditor() {
     try {
       const docRef = doc(db, 'users', user.uid, 'canvases', canvasId)
       
+      // Generate preview SVG
+      const preview = await generatePreview()
+      
       await updateDoc(docRef, {
         content: stateHash,
+        ...(preview && { preview }), // Only update preview if generated
         updatedAt: serverTimestamp(),
       })
       
@@ -102,7 +171,7 @@ export function CanvasEditor() {
       console.error('Error saving canvas:', err)
       setSaveStatus('idle')
     }
-  }, [user, canvasId])
+  }, [user, canvasId, generatePreview])
 
   // Hybrid throttle + debounce save strategy
   const saveCanvas = useCallback(
@@ -463,6 +532,9 @@ export function CanvasEditor() {
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
         <Excalidraw
           key={excalidrawKey}
+          excalidrawAPI={(api) => {
+            excalidrawAPIRef.current = api
+          }}
           initialData={{
             elements: canvasData?.elements || [],
             appState: {

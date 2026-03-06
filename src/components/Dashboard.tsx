@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Layout,
@@ -21,6 +21,7 @@ import {
   EditOutlined,
   LogoutOutlined,
   UserOutlined,
+  LoadingOutlined,
 } from '@ant-design/icons'
 import {
   collection,
@@ -31,7 +32,9 @@ import {
   deleteDoc,
   doc,
   serverTimestamp,
+  updateDoc,
 } from 'firebase/firestore'
+import { exportToSvg } from '@excalidraw/excalidraw'
 import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { Logo } from './Logo'
@@ -43,6 +46,8 @@ const { Text } = Typography
 interface Canvas {
   id: string
   name: string
+  content?: string  // JSON string of canvas data
+  preview?: string  // SVG string for canvas preview
   createdAt: any
   updatedAt: any
 }
@@ -55,8 +60,77 @@ export function Dashboard() {
   const [newCanvasName, setNewCanvasName] = useState('')
   const [isCreating, setIsCreating] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [generatedPreviews, setGeneratedPreviews] = useState<Record<string, string>>({})
+  const [generatingIds, setGeneratingIds] = useState<string[]>([])
+  const generatingRef = useRef<Set<string>>(new Set())
   const { token } = theme.useToken()
   const { modal, message } = App.useApp()
+
+  // Helper to check if a color is dark
+  const isColorDark = (color: string): boolean => {
+    if (!color || color === 'transparent') return false
+    const hex = color.replace('#', '')
+    if (hex.length === 6) {
+      const r = parseInt(hex.substring(0, 2), 16)
+      const g = parseInt(hex.substring(2, 4), 16)
+      const b = parseInt(hex.substring(4, 6), 16)
+      const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+      return luminance < 0.5
+    }
+    return false
+  }
+
+  // Generate preview for a canvas that doesn't have one
+  const generatePreviewForCanvas = useCallback(async (canvas: Canvas) => {
+    if (!user || !canvas.content) return
+    if (generatingRef.current.has(canvas.id)) return
+
+    try {
+      const parsed = JSON.parse(canvas.content)
+      const elements = parsed.elements || []
+      
+      // Skip if no elements
+      if (elements.length === 0) return
+
+      generatingRef.current.add(canvas.id)
+      setGeneratingIds(Array.from(generatingRef.current))
+
+      // Clone elements and change dark colors to light for preview
+      const previewElements = elements.map((el: any) => {
+        const clone = { ...el }
+        if (clone.strokeColor && isColorDark(clone.strokeColor)) {
+          clone.strokeColor = '#ffffff'
+        }
+        if (clone.backgroundColor && clone.backgroundColor !== 'transparent' && isColorDark(clone.backgroundColor)) {
+          clone.backgroundColor = '#cccccc'
+        }
+        return clone
+      })
+
+      const svg = await exportToSvg({
+        elements: previewElements,
+        appState: {
+          exportBackground: false,
+          exportPadding: 10,
+        },
+        files: parsed.files || {},
+      })
+
+      const svgString = new XMLSerializer().serializeToString(svg)
+      
+      // Store in local state for immediate display
+      setGeneratedPreviews(prev => ({ ...prev, [canvas.id]: svgString }))
+
+      // Also save to Firestore for future use
+      const docRef = doc(db, 'users', user.uid, 'canvases', canvas.id)
+      await updateDoc(docRef, { preview: svgString })
+    } catch (err) {
+      console.error('Error generating preview:', err)
+    } finally {
+      generatingRef.current.delete(canvas.id)
+      setGeneratingIds(Array.from(generatingRef.current))
+    }
+  }, [user])
 
   useEffect(() => {
     if (!user) return
@@ -75,6 +149,16 @@ export function Dashboard() {
 
     return unsubscribe
   }, [user])
+
+  // Generate previews for canvases that don't have them
+  useEffect(() => {
+    canvases.forEach(canvas => {
+      if (!canvas.preview && !generatedPreviews[canvas.id] && canvas.content) {
+        generatePreviewForCanvas(canvas)
+      }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canvases])
 
   const createCanvas = async () => {
     if (!user || !newCanvasName.trim()) return
@@ -292,9 +376,10 @@ export function Dashboard() {
 
             {canvases.map((canvas) => (
               <Col xs={24} sm={12} md={8} lg={6} key={canvas.id}>
-                <TiltCard onClick={() => navigate(`/canvas/${canvas.id}`)}>
+                <TiltCard>
                   <Card
                     hoverable
+                    onClick={() => navigate(`/canvas/${canvas.id}`)}
                     style={{
                       background: token.colorBgContainer,
                       borderColor: token.colorBorder,
@@ -311,9 +396,39 @@ export function Dashboard() {
                           alignItems: 'center',
                           justifyContent: 'center',
                           borderBottom: `1px solid ${token.colorBorder}`,
+                          overflow: 'hidden',
                         }}
                       >
-                        <EditOutlined style={{ fontSize: 32, color: token.colorTextTertiary }} />
+                        {(() => {
+                          const previewSvg = canvas.preview || generatedPreviews[canvas.id]
+                          const isGenerating = generatingIds.includes(canvas.id)
+                          
+                          if (previewSvg) {
+                            return (
+                              <div
+                                style={{
+                                  width: '100%',
+                                  height: '100%',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  padding: 4,
+                                  pointerEvents: 'none',
+                                  overflow: 'hidden',
+                                }}
+                                dangerouslySetInnerHTML={{
+                                  __html: previewSvg,
+                                }}
+                              />
+                            )
+                          }
+                          
+                          if (isGenerating) {
+                            return <LoadingOutlined style={{ fontSize: 24, color: token.colorTextTertiary }} />
+                          }
+                          
+                          return <EditOutlined style={{ fontSize: 32, color: token.colorTextTertiary }} />
+                        })()}
                       </div>
                     }
                     actions={[

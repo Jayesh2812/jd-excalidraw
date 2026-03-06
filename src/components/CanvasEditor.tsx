@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback, lazy, Suspense } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Layout, Button, Typography, Spin, Space, Input, theme } from 'antd'
 import {
@@ -13,9 +13,12 @@ import '@excalidraw/excalidraw/index.css'
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
-import { VersionHistory, SaveVersionButton } from './VersionHistory'
+import { SaveVersionButton } from './VersionHistory'
 import { convertElementColorsForPreview } from '../utils/colorUtils'
 import { compressSvg } from '../utils/svgUtils'
+
+// Lazy load VersionHistory sidebar (only shown when opened)
+const VersionHistory = lazy(() => import('./VersionHistory').then(m => ({ default: m.VersionHistory })))
 
 const { Header } = Layout
 const { Title, Text } = Typography
@@ -563,15 +566,17 @@ export function CanvasEditor() {
         </div>
 
         {/* Version History Sidebar */}
-        {user && canvasId && (
-          <VersionHistory
-            userId={user.uid}
-            canvasId={canvasId}
-            currentContent={currentContentRef.current}
-            isOpen={isVersionSidebarOpen}
-            onClose={() => setIsVersionSidebarOpen(false)}
-            onRestore={handleRestoreVersion}
-          />
+        {user && canvasId && isVersionSidebarOpen && (
+          <Suspense fallback={<div style={{ position: 'absolute', right: 0, width: 300, height: '100%', background: '#141414', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spin /></div>}>
+            <VersionHistory
+              userId={user.uid}
+              canvasId={canvasId}
+              currentContent={currentContentRef.current}
+              isOpen={isVersionSidebarOpen}
+              onClose={() => setIsVersionSidebarOpen(false)}
+              onRestore={handleRestoreVersion}
+            />
+          </Suspense>
         )}
       </div>
     </Layout>

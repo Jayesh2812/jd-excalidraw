@@ -1,11 +1,14 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Button, Typography, Spin, Card, Space } from 'antd'
 import { GoogleOutlined } from '@ant-design/icons'
 import { useAuth } from './AuthContext'
-import { Dashboard } from './components/Dashboard'
-import { CanvasEditor } from './components/CanvasEditor'
 import { Logo } from './components/Logo'
 import './App.css'
+
+// Lazy load heavy components for code splitting
+const Dashboard = lazy(() => import('./components/Dashboard').then(m => ({ default: m.Dashboard })))
+const CanvasEditor = lazy(() => import('./components/CanvasEditor').then(m => ({ default: m.CanvasEditor })))
 
 const { Text } = Typography
 
@@ -39,33 +42,34 @@ function LoginPage() {
   )
 }
 
+// Loading fallback for lazy-loaded components
+function PageLoader() {
+  return (
+    <div className="app-loader">
+      <Spin size="large" />
+    </div>
+  )
+}
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
 
   if (loading) {
-    return (
-      <div className="app-loader">
-        <Spin size="large" />
-      </div>
-    )
+    return <PageLoader />
   }
 
   if (!user) {
     return <Navigate to="/login" replace />
   }
 
-  return <>{children}</>
+  return <Suspense fallback={<PageLoader />}>{children}</Suspense>
 }
 
 function App() {
   const { user, loading } = useAuth()
 
   if (loading) {
-    return (
-      <div className="app-loader">
-        <Spin size="large" />
-      </div>
-    )
+    return <PageLoader />
   }
 
   return (

@@ -1,6 +1,29 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
+  Layout,
+  Typography,
+  Button,
+  Input,
+  Card,
+  Avatar,
+  Space,
+  Spin,
+  Empty,
+  Row,
+  Col,
+  Popconfirm,
+  message,
+  theme,
+} from 'antd'
+import {
+  PlusOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  LogoutOutlined,
+  UserOutlined,
+} from '@ant-design/icons'
+import {
   collection,
   query,
   orderBy,
@@ -12,7 +35,10 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
-import './Dashboard.css'
+import { Logo } from './Logo'
+
+const { Header, Content } = Layout
+const { Text } = Typography
 
 interface Canvas {
   id: string
@@ -28,6 +54,7 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [newCanvasName, setNewCanvasName] = useState('')
   const [isCreating, setIsCreating] = useState(false)
+  const { token } = theme.useToken()
 
   useEffect(() => {
     if (!user) return
@@ -67,19 +94,20 @@ export function Dashboard() {
       navigate(`/canvas/${docRef.id}`)
     } catch (error) {
       console.error('Error creating canvas:', error)
+      message.error('Failed to create canvas')
     }
     setIsCreating(false)
   }
 
-  const deleteCanvas = async (canvasId: string, e: React.MouseEvent) => {
-    e.stopPropagation()
+  const deleteCanvas = async (canvasId: string) => {
     if (!user) return
-    if (!confirm('Are you sure you want to delete this canvas?')) return
 
     try {
       await deleteDoc(doc(db, 'users', user.uid, 'canvases', canvasId))
+      message.success('Canvas deleted')
     } catch (error) {
       console.error('Error deleting canvas:', error)
+      message.error('Failed to delete canvas')
     }
   }
 
@@ -95,94 +123,156 @@ export function Dashboard() {
     })
   }
 
-  const isButtonDisabled = isCreating || !newCanvasName.trim()
-
   return (
-    <div className="dashboard">
-      <header className="dashboard__header">
-        <h1 className="dashboard__logo">Excalidraw</h1>
-        <div className="dashboard__user-section">
+    <Layout style={{ minHeight: '100vh', background: token.colorBgLayout }}>
+      <Header
+        style={{
+          background: token.colorBgContainer,
+          borderBottom: `1px solid ${token.colorBorder}`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 24px',
+          position: 'sticky',
+          top: 0,
+          zIndex: 100,
+        }}
+      >
+<Logo size={28} />
+        <Space>
           {user?.photoURL ? (
-            <img 
-              src={user.photoURL} 
-              alt="" 
-              className="dashboard__avatar" 
-              referrerPolicy="no-referrer" 
-            />
+            <Avatar src={user.photoURL} referrerPolicy="no-referrer" />
           ) : (
-            <div className="dashboard__avatar-fallback">
-              {(user?.displayName || user?.email || '?')[0].toUpperCase()}
-            </div>
+            <Avatar icon={<UserOutlined />} />
           )}
-          <span className="dashboard__user-name">
+          <Text style={{ color: token.colorText }}>
             {user?.displayName || user?.email}
-          </span>
-          <button onClick={logout} className="dashboard__logout-button">
-            Sign Out
-          </button>
-        </div>
-      </header>
-
-      <main className="dashboard__main">
-        <div className="dashboard__create-section">
-          <input
+          </Text>
+          <Button
             type="text"
+            icon={<LogoutOutlined />}
+            onClick={logout}
+            style={{ color: token.colorTextSecondary }}
+          >
+            Sign Out
+          </Button>
+        </Space>
+      </Header>
+
+      <Content style={{ padding: '24px', maxWidth: 1200, margin: '0 auto', width: '100%' }}>
+        <Space.Compact style={{ width: '100%', marginBottom: 32 }}>
+          <Input
+            placeholder="Enter canvas name..."
             value={newCanvasName}
             onChange={(e) => setNewCanvasName(e.target.value)}
-            placeholder="Enter canvas name..."
-            className="dashboard__input"
-            onKeyDown={(e) => e.key === 'Enter' && createCanvas()}
+            onPressEnter={createCanvas}
+            style={{ maxWidth: 400 }}
+            size="large"
           />
-          <button
+          <Button
+            type="primary"
+            size="large"
+            icon={<PlusOutlined />}
             onClick={createCanvas}
-            disabled={isButtonDisabled}
-            className={`dashboard__create-button ${isButtonDisabled ? 'dashboard__create-button--disabled' : ''}`}
+            loading={isCreating}
+            disabled={!newCanvasName.trim()}
+            style={{
+              background: token.colorText,
+              color: token.colorBgContainer,
+              borderColor: token.colorText,
+            }}
           >
-            {isCreating ? 'Creating...' : '+ New Canvas'}
-          </button>
-        </div>
+            New Canvas
+          </Button>
+        </Space.Compact>
 
         {loading ? (
-          <div className="dashboard__loading">
-            <div className="dashboard__spinner" />
+          <div style={{ textAlign: 'center', padding: 80 }}>
+            <Spin size="large" />
           </div>
         ) : canvases.length === 0 ? (
-          <div className="dashboard__empty-state">
-            <div className="dashboard__empty-icon">🎨</div>
-            <h2 className="dashboard__empty-title">No canvases yet</h2>
-            <p className="dashboard__empty-text">
-              Create your first canvas to start drawing!
-            </p>
-          </div>
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={
+              <Space direction="vertical">
+                <Text style={{ color: token.colorTextSecondary }}>No canvases yet</Text>
+                <Text type="secondary">Create your first canvas to start drawing!</Text>
+              </Space>
+            }
+            style={{ padding: 80 }}
+          />
         ) : (
-          <div className="dashboard__grid">
+          <Row gutter={[16, 16]}>
             {canvases.map((canvas) => (
-              <div
-                key={canvas.id}
-                className="canvas-card"
-                onClick={() => navigate(`/canvas/${canvas.id}`)}
-              >
-                <div className="canvas-card__preview">
-                  <span className="canvas-card__preview-icon">✏️</span>
-                </div>
-                <div className="canvas-card__content">
-                  <h3 className="canvas-card__title">{canvas.name}</h3>
-                  <p className="canvas-card__date">
-                    Updated: {formatDate(canvas.updatedAt)}
-                  </p>
-                </div>
-                <button
-                  onClick={(e) => deleteCanvas(canvas.id, e)}
-                  className="canvas-card__delete-button"
-                  title="Delete canvas"
+              <Col xs={24} sm={12} md={8} lg={6} key={canvas.id}>
+                <Card
+                  hoverable
+                  onClick={() => navigate(`/canvas/${canvas.id}`)}
+                  style={{
+                    background: token.colorBgContainer,
+                    borderColor: token.colorBorder,
+                  }}
+                  styles={{
+                    body: { padding: 16 },
+                  }}
+                  cover={
+                    <div
+                      style={{
+                        height: 120,
+                        background: token.colorBgElevated,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderBottom: `1px solid ${token.colorBorder}`,
+                      }}
+                    >
+                      <EditOutlined style={{ fontSize: 32, color: token.colorTextTertiary }} />
+                    </div>
+                  }
+                  actions={[
+                    <Popconfirm
+                      key="delete"
+                      title="Delete canvas"
+                      description="Are you sure you want to delete this canvas?"
+                      onConfirm={(e) => {
+                        e?.stopPropagation()
+                        deleteCanvas(canvas.id)
+                      }}
+                      onCancel={(e) => e?.stopPropagation()}
+                      okText="Delete"
+                      cancelText="Cancel"
+                      okButtonProps={{ danger: true }}
+                    >
+                      <Button
+                        type="text"
+                        danger
+                        icon={<DeleteOutlined />}
+                        onClick={(e) => e.stopPropagation()}
+                        size="small"
+                      >
+                        Delete
+                      </Button>
+                    </Popconfirm>,
+                  ]}
                 >
-                  🗑️
-                </button>
-              </div>
+                  <Card.Meta
+                    title={
+                      <Text ellipsis style={{ color: token.colorText }}>
+                        {canvas.name}
+                      </Text>
+                    }
+                    description={
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {formatDate(canvas.updatedAt)}
+                      </Text>
+                    }
+                  />
+                </Card>
+              </Col>
             ))}
-          </div>
+          </Row>
         )}
-      </main>
-    </div>
+      </Content>
+    </Layout>
   )
 }

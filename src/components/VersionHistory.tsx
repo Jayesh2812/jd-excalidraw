@@ -1,5 +1,25 @@
 import { useEffect, useState } from 'react'
 import {
+  Drawer,
+  Typography,
+  Button,
+  Input,
+  List,
+  Space,
+  Spin,
+  Empty,
+  Tooltip,
+  theme,
+  Flex,
+} from 'antd'
+import {
+  SaveOutlined,
+  ThunderboltOutlined,
+  CloseOutlined,
+  HistoryOutlined,
+  PushpinOutlined,
+} from '@ant-design/icons'
+import {
   collection,
   query,
   orderBy,
@@ -8,7 +28,8 @@ import {
   serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '../firebase'
-import './VersionHistory.css'
+
+const { Title, Text } = Typography
 
 interface Version {
   id: string
@@ -39,8 +60,8 @@ export function VersionHistory({
   const [saving, setSaving] = useState(false)
   const [versionName, setVersionName] = useState('')
   const [showNameInput, setShowNameInput] = useState(false)
+  const { token } = theme.useToken()
 
-  // Load versions
   useEffect(() => {
     if (!userId || !canvasId) return
 
@@ -108,101 +129,149 @@ export function VersionHistory({
     }
   }
 
-  if (!isOpen) return null
-
   return (
-    <div className="version-history">
-      <div className="version-history__header">
-        <h2 className="version-history__title">Version History</h2>
-        <button onClick={onClose} className="version-history__close-button">
-          ✕
-        </button>
-      </div>
-
-      <div className="version-history__save-section">
+    <Drawer
+      title={
+        <Space>
+          <HistoryOutlined />
+          <span>Version History</span>
+        </Space>
+      }
+      placement="right"
+      onClose={onClose}
+      open={isOpen}
+      width={300}
+      closeIcon={<CloseOutlined style={{ color: token.colorText }} />}
+      styles={{
+        header: {
+          background: token.colorBgContainer,
+          borderBottom: `1px solid ${token.colorBorder}`,
+        },
+        body: {
+          background: token.colorBgContainer,
+          padding: 16,
+        },
+      }}
+    >
+      {/* Save Section */}
+      <div style={{ marginBottom: 24 }}>
         {showNameInput ? (
-          <div className="version-history__name-input-container">
-            <input
-              type="text"
+          <Space direction="vertical" style={{ width: '100%' }}>
+            <Input
+              placeholder="Version name (optional)"
               value={versionName}
               onChange={(e) => setVersionName(e.target.value)}
-              placeholder="Version name (optional)"
-              className="version-history__name-input"
+              onPressEnter={() => saveVersion(versionName)}
               autoFocus
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') saveVersion(versionName)
-                if (e.key === 'Escape') setShowNameInput(false)
-              }}
             />
-            <div className="version-history__name-actions">
-              <button
+            <Space style={{ width: '100%' }}>
+              <Button
+                type="primary"
                 onClick={() => saveVersion(versionName)}
-                disabled={saving}
-                className="version-history__save-confirm-button"
+                loading={saving}
+                style={{
+                  background: token.colorText,
+                  color: token.colorBgContainer,
+                }}
               >
-                {saving ? 'Saving...' : 'Save'}
-              </button>
-              <button
-                onClick={() => setShowNameInput(false)}
-                className="version-history__cancel-button"
-              >
+                Save
+              </Button>
+              <Button onClick={() => setShowNameInput(false)}>
                 Cancel
-              </button>
-            </div>
-          </div>
+              </Button>
+            </Space>
+          </Space>
         ) : (
-          <div className="version-history__save-buttons">
-            <button
+          <Space direction="vertical" style={{ width: '100%' }}>
+            <Button
+              icon={<SaveOutlined />}
               onClick={handleSaveClick}
               disabled={saving}
-              className="version-history__save-button"
+              block
+              style={{
+                background: token.colorBgElevated,
+                borderColor: token.colorBorder,
+                color: token.colorText,
+              }}
             >
-              💾 Save with Name
-            </button>
-            <button
+              Save with Name
+            </Button>
+            <Button
+              icon={<ThunderboltOutlined />}
               onClick={handleQuickSave}
               disabled={saving}
-              className="version-history__quick-save-button"
+              loading={saving}
+              block
+              type="primary"
+              style={{
+                background: token.colorText,
+                color: token.colorBgContainer,
+              }}
             >
-              ⚡ Quick Save
-            </button>
-          </div>
+              Quick Save
+            </Button>
+          </Space>
         )}
       </div>
 
-      <div className="version-history__list">
-        {loading ? (
-          <div className="version-history__loading">
-            <div className="version-history__spinner" />
-          </div>
-        ) : versions.length === 0 ? (
-          <div className="version-history__empty">
-            <p className="version-history__empty-text">No versions saved yet</p>
-            <p className="version-history__empty-hint">
-              Click "Save Version" to create a checkpoint
-            </p>
-          </div>
-        ) : (
-          versions.map((version) => (
-            <div
-              key={version.id}
-              className="version-history__item"
+      {/* Versions List */}
+      {loading ? (
+        <Flex justify="center" align="center" style={{ padding: 40 }}>
+          <Spin />
+        </Flex>
+      ) : versions.length === 0 ? (
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description={
+            <Space direction="vertical">
+              <Text type="secondary">No versions saved yet</Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                Click "Quick Save" to create a checkpoint
+              </Text>
+            </Space>
+          }
+        />
+      ) : (
+        <List
+          dataSource={versions}
+          renderItem={(version) => (
+            <List.Item
               onClick={() => handleRestore(version)}
+              style={{
+                cursor: 'pointer',
+                padding: '12px 8px',
+                borderRadius: token.borderRadius,
+                marginBottom: 4,
+                border: `1px solid ${token.colorBorder}`,
+                background: token.colorBgElevated,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = token.colorBgSpotlight
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = token.colorBgElevated
+              }}
             >
-              <div className="version-history__item-info">
-                <span className="version-history__item-name">
-                  {version.name || 'Untitled version'}
-                </span>
-                <span className="version-history__item-date">
-                  {formatDate(version.createdAt)}
-                </span>
-              </div>
-              <span className="version-history__item-action">Restore →</span>
-            </div>
-          ))
-        )}
-      </div>
-    </div>
+              <List.Item.Meta
+                title={
+                  <Text style={{ color: token.colorText }}>
+                    {version.name || 'Untitled version'}
+                  </Text>
+                }
+                description={
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    {formatDate(version.createdAt)}
+                  </Text>
+                }
+              />
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                Restore →
+              </Text>
+            </List.Item>
+          )}
+        />
+      )}
+    </Drawer>
   )
 }
 
@@ -212,10 +281,24 @@ interface SaveVersionButtonProps {
 }
 
 export function SaveVersionButton({ onClick }: SaveVersionButtonProps) {
+  const { token } = theme.useToken()
+
   return (
-    <button onClick={onClick} className="save-version-fab" title="Save Version">
-      <span className="save-version-fab__icon">📌</span>
-      <span className="save-version-fab__text">Save Version</span>
-    </button>
+    <Tooltip title="Save Version" placement="left">
+      <Button
+        type="primary"
+        shape="round"
+        size="large"
+        icon={<PushpinOutlined />}
+        onClick={onClick}
+        style={{
+          background: token.colorText,
+          color: token.colorBgContainer,
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+        }}
+      >
+        Save Version
+      </Button>
+    </Tooltip>
   )
 }

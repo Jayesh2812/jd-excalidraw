@@ -1,12 +1,21 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { Layout, Button, Typography, Spin, Space, theme } from 'antd'
+import {
+  ArrowLeftOutlined,
+  HistoryOutlined,
+  SaveOutlined,
+  CheckOutlined,
+} from '@ant-design/icons'
 import { Excalidraw } from '@excalidraw/excalidraw'
 import '@excalidraw/excalidraw/index.css'
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { VersionHistory, SaveVersionButton } from './VersionHistory'
-import './CanvasEditor.css'
+
+const { Header } = Layout
+const { Title, Text } = Typography
 
 interface CanvasData {
   name: string
@@ -28,21 +37,21 @@ export function CanvasEditor() {
   const [error, setError] = useState<string | null>(null)
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'idle'>('idle')
   const [isVersionSidebarOpen, setIsVersionSidebarOpen] = useState(false)
-  const [excalidrawKey, setExcalidrawKey] = useState(0) // Key to force re-render Excalidraw
+  const [excalidrawKey, setExcalidrawKey] = useState(0)
+  const { token } = theme.useToken()
   
   // Refs for hybrid throttle + debounce
   const lastSavedHashRef = useRef<string>('')
   const pendingStateRef = useRef<string | null>(null)
-  const currentContentRef = useRef<string>('') // Track current content for version saving
+  const currentContentRef = useRef<string>('')
   const lastSaveTimeRef = useRef<number>(0)
   const debounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const throttleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hasUnsavedChangesRef = useRef<boolean>(false)
 
-  // Extract saveable state (excluding transient properties like cursor, selection)
+  // Extract saveable state
   const getSaveableState = (elements: readonly any[], appState: any, files: any) => {
     const {
-      // Exclude transient/non-serializable fields
       collaborators,
       followedBy,
       cursorButton,
@@ -93,25 +102,19 @@ export function CanvasEditor() {
   }, [user, canvasId])
 
   // Hybrid throttle + debounce save strategy
-  // - Debounce: Save quickly (800ms) after user stops making changes
-  // - Throttle: Guarantee saves every 3s while actively working (prevents data loss)
   const saveCanvas = useCallback(
     (elements: readonly any[], appState: any, files: any) => {
       if (!user || !canvasId) return
 
-      // Get saveable state (excludes transient properties)
       const saveableState = getSaveableState(elements, appState, files)
       const stateHash = JSON.stringify(saveableState)
       
-      // Always update current content ref for version saving
       currentContentRef.current = stateHash
       
-      // Check if there are actual changes worth saving
       if (stateHash === lastSavedHashRef.current) {
-        return // No meaningful changes, skip save
+        return
       }
 
-      // Mark as having unsaved changes
       hasUnsavedChangesRef.current = true
       pendingStateRef.current = stateHash
       setSaveStatus('saving')
@@ -119,14 +122,11 @@ export function CanvasEditor() {
       const now = Date.now()
       const timeSinceLastSave = now - lastSaveTimeRef.current
 
-      // Clear existing debounce timeout
       if (debounceTimeoutRef.current) {
         clearTimeout(debounceTimeoutRef.current)
       }
 
-      // If throttle interval has passed, save immediately
       if (timeSinceLastSave >= THROTTLE_INTERVAL) {
-        // Clear throttle timeout since we're saving now
         if (throttleTimeoutRef.current) {
           clearTimeout(throttleTimeoutRef.current)
           throttleTimeoutRef.current = null
@@ -135,10 +135,8 @@ export function CanvasEditor() {
         return
       }
 
-      // Set up debounce - save after user stops making changes
       debounceTimeoutRef.current = setTimeout(() => {
         if (pendingStateRef.current && hasUnsavedChangesRef.current) {
-          // Clear throttle timeout since debounce is saving
           if (throttleTimeoutRef.current) {
             clearTimeout(throttleTimeoutRef.current)
             throttleTimeoutRef.current = null
@@ -147,14 +145,11 @@ export function CanvasEditor() {
         }
       }, DEBOUNCE_DELAY)
 
-      // Set up throttle fallback - ensure we save even if user keeps making changes
-      // Only set if not already set
       if (!throttleTimeoutRef.current) {
         const remainingThrottleTime = THROTTLE_INTERVAL - timeSinceLastSave
         throttleTimeoutRef.current = setTimeout(() => {
           throttleTimeoutRef.current = null
           if (pendingStateRef.current && hasUnsavedChangesRef.current) {
-            // Clear debounce since throttle is saving
             if (debounceTimeoutRef.current) {
               clearTimeout(debounceTimeoutRef.current)
               debounceTimeoutRef.current = null
@@ -179,7 +174,6 @@ export function CanvasEditor() {
         if (docSnap.exists()) {
           const docData = docSnap.data()
           
-          // Parse content from JSON string if it exists, otherwise use legacy format
           let canvasContent: CanvasData
           if (docData.content) {
             const parsed = JSON.parse(docData.content)
@@ -190,7 +184,6 @@ export function CanvasEditor() {
               files: parsed.files || {},
             }
           } else {
-            // Legacy format (direct fields)
             canvasContent = {
               name: docData.name,
               elements: docData.elements || [],
@@ -200,7 +193,6 @@ export function CanvasEditor() {
           }
           
           setCanvasData(canvasContent)
-          // Initialize refs
           const contentHash = JSON.stringify({
             elements: canvasContent.elements,
             appState: canvasContent.appState,
@@ -221,43 +213,31 @@ export function CanvasEditor() {
     loadCanvas()
   }, [user, canvasId])
 
-  // Warn user before leaving if there are unsaved changes
+  // Warn before leaving
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (hasUnsavedChangesRef.current) {
         e.preventDefault()
-        // Modern browsers require returnValue to be set
         e.returnValue = 'You have unsaved changes. Are you sure you want to leave?'
         return e.returnValue
       }
     }
 
     window.addEventListener('beforeunload', handleBeforeUnload)
-    
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload)
-    }
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [])
 
-  // Cleanup and save pending changes on unmount
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      // Clear both timeouts
-      if (debounceTimeoutRef.current) {
-        clearTimeout(debounceTimeoutRef.current)
-      }
-      if (throttleTimeoutRef.current) {
-        clearTimeout(throttleTimeoutRef.current)
-      }
-      // Try to save any pending changes before unmount
+      if (debounceTimeoutRef.current) clearTimeout(debounceTimeoutRef.current)
+      if (throttleTimeoutRef.current) clearTimeout(throttleTimeoutRef.current)
       if (pendingStateRef.current && hasUnsavedChangesRef.current) {
-        // Note: This is best-effort, async operations may not complete
         performSave(pendingStateRef.current)
       }
     }
   }, [performSave])
 
-  // Handle back navigation with unsaved changes warning
   const handleBack = useCallback(() => {
     if (hasUnsavedChangesRef.current) {
       const confirmed = window.confirm('You have unsaved changes. Are you sure you want to leave?')
@@ -266,12 +246,10 @@ export function CanvasEditor() {
     navigate('/')
   }, [navigate])
 
-  // Handle restoring a version
   const handleRestoreVersion = useCallback(async (content: string) => {
     try {
       const parsed = JSON.parse(content)
       
-      // Update canvas data to trigger re-render
       setCanvasData(prev => ({
         name: prev?.name || 'Untitled',
         elements: parsed.elements || [],
@@ -279,15 +257,12 @@ export function CanvasEditor() {
         files: parsed.files || {},
       }))
       
-      // Update refs
       lastSavedHashRef.current = content
       currentContentRef.current = content
       hasUnsavedChangesRef.current = false
       
-      // Force Excalidraw to re-render with new data
       setExcalidrawKey(prev => prev + 1)
       
-      // Save the restored version to main document
       if (user && canvasId) {
         const docRef = doc(db, 'users', user.uid, 'canvases', canvasId)
         await updateDoc(docRef, {
@@ -296,77 +271,134 @@ export function CanvasEditor() {
         })
       }
       
-      // Close sidebar
       setIsVersionSidebarOpen(false)
     } catch (err) {
       console.error('Error restoring version:', err)
     }
   }, [user, canvasId])
 
-  // Toggle version sidebar
   const toggleVersionSidebar = useCallback(() => {
     setIsVersionSidebarOpen(prev => !prev)
   }, [])
 
   if (loading) {
     return (
-      <div className="canvas-editor-loading">
-        <div className="canvas-editor-loading__spinner" />
-        <p className="canvas-editor-loading__text">Loading canvas...</p>
+      <div
+        style={{
+          height: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: token.colorBgLayout,
+        }}
+      >
+        <Spin size="large" />
+        <Text style={{ marginTop: 16, color: token.colorTextSecondary }}>
+          Loading canvas...
+        </Text>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="canvas-editor-error">
-        <h2 className="canvas-editor-error__title">😕 {error}</h2>
-        <button 
-          onClick={() => navigate('/')} 
-          className="canvas-editor-error__back-button"
+      <div
+        style={{
+          height: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: token.colorBgLayout,
+          gap: 16,
+        }}
+      >
+        <Title level={3} style={{ color: token.colorText }}>
+          😕 {error}
+        </Title>
+        <Button
+          type="primary"
+          onClick={() => navigate('/')}
+          style={{
+            background: token.colorText,
+            color: token.colorBgContainer,
+          }}
         >
           Back to Dashboard
-        </button>
+        </Button>
       </div>
     )
   }
 
   return (
-    <div className="canvas-editor">
-      <header className="canvas-editor__header">
-        <button 
-          onClick={handleBack} 
-          className="canvas-editor__back-button"
-        >
-          ← Back
-        </button>
-        <h1 className="canvas-editor__title">
-          {canvasData?.name || 'Untitled'}
-        </h1>
-        <div className="canvas-editor__header-actions">
-          <div className="canvas-editor__save-status">
-            {saveStatus === 'saving' && (
-              <span className="canvas-editor__save-text canvas-editor__save-text--saving">
-                💾 Saving...
-              </span>
-            )}
-            {saveStatus === 'saved' && (
-              <span className="canvas-editor__save-text canvas-editor__save-text--saved">
-                ✓ Saved
-              </span>
-            )}
-          </div>
-          <button 
-            onClick={toggleVersionSidebar}
-            className={`canvas-editor__history-button ${isVersionSidebarOpen ? 'canvas-editor__history-button--active' : ''}`}
-            title="Version History"
+    <Layout style={{ height: '100vh', background: token.colorBgLayout }}>
+      <Header
+        style={{
+          background: token.colorBgContainer,
+          borderBottom: `1px solid ${token.colorBorder}`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 16px',
+          height: 48,
+          lineHeight: '48px',
+        }}
+      >
+        <Space>
+          <Button
+            type="text"
+            icon={<ArrowLeftOutlined />}
+            onClick={handleBack}
+            style={{ color: token.colorText }}
           >
-            🕐 History
-          </button>
-        </div>
-      </header>
-      
-      <div className="canvas-editor__editor-container">
+            Back
+          </Button>
+          <Title
+            level={5}
+            style={{
+              margin: 0,
+              color: token.colorText,
+              maxWidth: 300,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {canvasData?.name || 'Untitled'}
+          </Title>
+        </Space>
+
+        <Space>
+          {saveStatus === 'saving' && (
+            <Space style={{ color: token.colorTextSecondary }}>
+              <SaveOutlined spin />
+              <Text style={{ color: token.colorTextSecondary }}>Saving...</Text>
+            </Space>
+          )}
+          {saveStatus === 'saved' && (
+            <Space style={{ color: token.colorSuccess }}>
+              <CheckOutlined />
+              <Text style={{ color: token.colorSuccess }}>Saved</Text>
+            </Space>
+          )}
+          <Button
+            type={isVersionSidebarOpen ? 'primary' : 'text'}
+            icon={<HistoryOutlined />}
+            onClick={toggleVersionSidebar}
+            style={isVersionSidebarOpen ? {
+              background: token.colorText,
+              color: token.colorBgContainer,
+            } : {
+              color: token.colorText,
+            }}
+          >
+            History
+          </Button>
+        </Space>
+      </Header>
+
+      <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
         <Excalidraw
           key={excalidrawKey}
           initialData={{
@@ -381,24 +413,29 @@ export function CanvasEditor() {
             saveCanvas(elements, appState, files)
           }}
         />
-      </div>
 
-      {/* Floating Save Version Button */}
-      <div className={isVersionSidebarOpen ? 'save-version-fab--shifted' : ''}>
-        <SaveVersionButton onClick={toggleVersionSidebar} />
-      </div>
+        {/* Floating Save Version Button */}
+        <div style={{ 
+          position: 'absolute', 
+          bottom: 24, 
+          right: isVersionSidebarOpen ? 324 : 24,
+          transition: 'right 0.3s ease',
+        }}>
+          <SaveVersionButton onClick={toggleVersionSidebar} />
+        </div>
 
-      {/* Version History Sidebar */}
-      {user && canvasId && (
-        <VersionHistory
-          userId={user.uid}
-          canvasId={canvasId}
-          currentContent={currentContentRef.current}
-          isOpen={isVersionSidebarOpen}
-          onClose={() => setIsVersionSidebarOpen(false)}
-          onRestore={handleRestoreVersion}
-        />
-      )}
-    </div>
+        {/* Version History Sidebar */}
+        {user && canvasId && (
+          <VersionHistory
+            userId={user.uid}
+            canvasId={canvasId}
+            currentContent={currentContentRef.current}
+            isOpen={isVersionSidebarOpen}
+            onClose={() => setIsVersionSidebarOpen(false)}
+            onRestore={handleRestoreVersion}
+          />
+        )}
+      </div>
+    </Layout>
   )
 }

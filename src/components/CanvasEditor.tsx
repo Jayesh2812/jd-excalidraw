@@ -1,10 +1,10 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Layout, Button, Typography, Spin, Space, theme } from 'antd'
+import { Layout, Button, Typography, Spin, Space, Input, theme } from 'antd'
 import {
   ArrowLeftOutlined,
   HistoryOutlined,
-  SaveOutlined,
+  LoadingOutlined,
   CheckOutlined,
 } from '@ant-design/icons'
 import { Excalidraw } from '@excalidraw/excalidraw'
@@ -38,6 +38,8 @@ export function CanvasEditor() {
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'idle'>('idle')
   const [isVersionSidebarOpen, setIsVersionSidebarOpen] = useState(false)
   const [excalidrawKey, setExcalidrawKey] = useState(0)
+  const [isEditingName, setIsEditingName] = useState(false)
+  const [editedName, setEditedName] = useState('')
   const { token } = theme.useToken()
   
   // Refs for hybrid throttle + debounce
@@ -64,6 +66,7 @@ export function CanvasEditor() {
       resizingElement,
       selectionElement,
       draggingElement,
+      isBindingEnabled,
       ...saveableAppState
     } = appState
 
@@ -281,6 +284,38 @@ export function CanvasEditor() {
     setIsVersionSidebarOpen(prev => !prev)
   }, [])
 
+  // Start editing canvas name
+  const startEditingName = useCallback(() => {
+    setEditedName(canvasData?.name || '')
+    setIsEditingName(true)
+  }, [canvasData?.name])
+
+  // Save canvas name
+  const saveCanvasName = useCallback(async () => {
+    if (!user || !canvasId || !editedName.trim()) {
+      setIsEditingName(false)
+      return
+    }
+
+    const newName = editedName.trim()
+    if (newName === canvasData?.name) {
+      setIsEditingName(false)
+      return
+    }
+
+    try {
+      const docRef = doc(db, 'users', user.uid, 'canvases', canvasId)
+      await updateDoc(docRef, {
+        name: newName,
+        updatedAt: serverTimestamp(),
+      })
+      setCanvasData(prev => prev ? { ...prev, name: newName } : null)
+    } catch (err) {
+      console.error('Error saving canvas name:', err)
+    }
+    setIsEditingName(false)
+  }, [user, canvasId, editedName, canvasData?.name])
+
   if (loading) {
     return (
       <div
@@ -354,25 +389,52 @@ export function CanvasEditor() {
           >
             Back
           </Button>
-          <Title
-            level={5}
-            style={{
-              margin: 0,
-              color: token.colorText,
-              maxWidth: 300,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {canvasData?.name || 'Untitled'}
-          </Title>
+          {isEditingName ? (
+            <Input
+              value={editedName}
+              onChange={(e) => setEditedName(e.target.value)}
+              onPressEnter={saveCanvasName}
+              onBlur={saveCanvasName}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setIsEditingName(false)
+                }
+              }}
+              autoFocus
+              variant="borderless"
+              style={{
+                fontSize: 16,
+                fontWeight: 600,
+                color: token.colorText,
+                padding: '0 4px',
+                width: 200,
+                background: token.colorBgElevated,
+                borderRadius: token.borderRadius,
+              }}
+            />
+          ) : (
+            <Title
+              level={5}
+              onClick={startEditingName}
+              style={{
+                margin: 0,
+                color: token.colorText,
+                maxWidth: 300,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                cursor: 'pointer',
+              }}
+            >
+              {canvasData?.name || 'Untitled'}
+            </Title>
+          )}
         </Space>
 
         <Space>
           {saveStatus === 'saving' && (
             <Space style={{ color: token.colorTextSecondary }}>
-              <SaveOutlined spin />
+              <LoadingOutlined />
               <Text style={{ color: token.colorTextSecondary }}>Saving...</Text>
             </Space>
           )}

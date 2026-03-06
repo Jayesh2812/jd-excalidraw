@@ -1,6 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { ConfigProvider, theme } from 'antd'
+import { ConfigProvider, theme, App as AntApp } from 'antd'
 import { AuthProvider } from './AuthContext'
 import App from './App.tsx'
 import './index.css'
@@ -78,9 +78,11 @@ const customTheme = {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ConfigProvider theme={customTheme}>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
+      <AntApp>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </AntApp>
     </ConfigProvider>
   </StrictMode>,
 )

@@ -9,13 +9,12 @@ import {
   Avatar,
   Space,
   Spin,
-  Empty,
   Row,
   Col,
-  Popconfirm,
-  message,
+  App,
   theme,
 } from 'antd'
+import { ExclamationCircleOutlined } from '@ant-design/icons'
 import {
   PlusOutlined,
   DeleteOutlined,
@@ -36,6 +35,7 @@ import {
 import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { Logo } from './Logo'
+import { TiltCard } from './TiltCard'
 
 const { Header, Content } = Layout
 const { Text } = Typography
@@ -54,7 +54,9 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [newCanvasName, setNewCanvasName] = useState('')
   const [isCreating, setIsCreating] = useState(false)
+  const [isModalOpen, setIsModalOpen] = useState(false)
   const { token } = theme.useToken()
+  const { modal, message } = App.useApp()
 
   useEffect(() => {
     if (!user) return
@@ -91,6 +93,7 @@ export function Dashboard() {
         updatedAt: serverTimestamp(),
       })
       setNewCanvasName('')
+      setIsModalOpen(false)
       navigate(`/canvas/${docRef.id}`)
     } catch (error) {
       console.error('Error creating canvas:', error)
@@ -99,16 +102,33 @@ export function Dashboard() {
     setIsCreating(false)
   }
 
-  const deleteCanvas = async (canvasId: string) => {
+  const openCreateModal = () => {
+    setNewCanvasName('')
+    setIsModalOpen(true)
+  }
+
+  const confirmDeleteCanvas = (canvasId: string, canvasName: string, e: React.MouseEvent) => {
+    e.stopPropagation()
     if (!user) return
 
-    try {
-      await deleteDoc(doc(db, 'users', user.uid, 'canvases', canvasId))
-      message.success('Canvas deleted')
-    } catch (error) {
-      console.error('Error deleting canvas:', error)
-      message.error('Failed to delete canvas')
-    }
+    modal.confirm({
+      title: 'Delete canvas',
+      icon: <ExclamationCircleOutlined />,
+      content: `Are you sure you want to delete "${canvasName}"? This action cannot be undone.`,
+      okText: 'Delete',
+      okType: 'danger',
+      cancelText: 'Cancel',
+      centered: true,
+      onOk: async () => {
+        try {
+          await deleteDoc(doc(db, 'users', user.uid, 'canvases', canvasId))
+          message.success('Canvas deleted')
+        } catch (error) {
+          console.error('Error deleting canvas:', error)
+          message.error('Failed to delete canvas')
+        }
+      },
+    })
   }
 
   const formatDate = (timestamp: any) => {
@@ -141,9 +161,18 @@ export function Dashboard() {
 <Logo size={28} />
         <Space>
           {user?.photoURL ? (
-            <Avatar src={user.photoURL} referrerPolicy="no-referrer" />
+            <Avatar
+              src={
+                <img
+                  src={user.photoURL}
+                  alt="avatar"
+                  referrerPolicy="no-referrer"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+              }
+            />
           ) : (
-            <Avatar icon={<UserOutlined />} />
+            <Avatar icon={<UserOutlined />} style={{ backgroundColor: '#303030' }} />
           )}
           <Text style={{ color: token.colorText }}>
             {user?.displayName || user?.email}
@@ -160,119 +189,169 @@ export function Dashboard() {
       </Header>
 
       <Content style={{ padding: '24px', maxWidth: 1200, margin: '0 auto', width: '100%' }}>
-        <Space.Compact style={{ width: '100%', marginBottom: 32 }}>
-          <Input
-            placeholder="Enter canvas name..."
-            value={newCanvasName}
-            onChange={(e) => setNewCanvasName(e.target.value)}
-            onPressEnter={createCanvas}
-            style={{ maxWidth: 400 }}
-            size="large"
-          />
-          <Button
-            type="primary"
-            size="large"
-            icon={<PlusOutlined />}
-            onClick={createCanvas}
-            loading={isCreating}
-            disabled={!newCanvasName.trim()}
-            style={{
-              background: token.colorText,
-              color: token.colorBgContainer,
-              borderColor: token.colorText,
-            }}
-          >
-            New Canvas
-          </Button>
-        </Space.Compact>
-
         {loading ? (
           <div style={{ textAlign: 'center', padding: 80 }}>
             <Spin size="large" />
           </div>
-        ) : canvases.length === 0 ? (
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description={
-              <Space direction="vertical">
-                <Text style={{ color: token.colorTextSecondary }}>No canvases yet</Text>
-                <Text type="secondary">Create your first canvas to start drawing!</Text>
-              </Space>
-            }
-            style={{ padding: 80 }}
-          />
         ) : (
           <Row gutter={[16, 16]}>
+            {/* Add New Canvas Card */}
+            <Col xs={24} sm={12} md={8} lg={6}>
+              <Card
+                hoverable={!isModalOpen}
+                onClick={!isModalOpen ? openCreateModal : undefined}
+                style={{
+                  background: isModalOpen ? token.colorBgContainer : 'transparent',
+                  borderColor: token.colorBorder,
+                  borderStyle: isModalOpen ? 'solid' : 'dashed',
+                }}
+                styles={{
+                  body: { padding: 16 },
+                }}
+                cover={
+                  <div
+                    style={{
+                      height: 120,
+                      background: isModalOpen ? token.colorBgElevated : 'transparent',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderBottom: `1px ${isModalOpen ? 'solid' : 'dashed'} ${token.colorBorder}`,
+                    }}
+                  >
+                    <PlusOutlined style={{ fontSize: 32, color: token.colorTextTertiary }} />
+                  </div>
+                }
+                actions={
+                  isModalOpen
+                    ? [
+                        <Button
+                          key="cancel"
+                          type="text"
+                          onClick={() => setIsModalOpen(false)}
+                          size="small"
+                        >
+                          Cancel
+                        </Button>,
+                        <Button
+                          key="create"
+                          type="text"
+                          onClick={createCanvas}
+                          loading={isCreating}
+                          disabled={!newCanvasName.trim()}
+                          size="small"
+                          style={
+                            newCanvasName.trim()
+                              ? { color: token.colorText, fontWeight: 500 }
+                              : {}
+                          }
+                        >
+                          Create
+                        </Button>,
+                      ]
+                    : [
+                        <Text key="hint" type="secondary" style={{ fontSize: 12 }}>
+                          Click to add
+                        </Text>,
+                      ]
+                }
+              >
+                <Card.Meta
+                  title={
+                    isModalOpen ? (
+                      <Input
+                        placeholder="Enter canvas name..."
+                        value={newCanvasName}
+                        onChange={(e) => setNewCanvasName(e.target.value)}
+                        onPressEnter={createCanvas}
+                        onKeyDown={(e) => e.key === 'Escape' && setIsModalOpen(false)}
+                        autoFocus
+                        variant="borderless"
+                        style={{
+                          padding: 0,
+                          fontSize: 14,
+                          fontWeight: 500,
+                          color: token.colorText,
+                          height: 22,
+                        }}
+                      />
+                    ) : (
+                      <Text style={{ color: token.colorTextSecondary }}>
+                        New Canvas
+                      </Text>
+                    )
+                  }
+                  description={
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      {isModalOpen ? "Whenever you're ready, press ENTER" : '\u00A0'}
+                    </Text>
+                  }
+                />
+              </Card>
+            </Col>
+
             {canvases.map((canvas) => (
               <Col xs={24} sm={12} md={8} lg={6} key={canvas.id}>
-                <Card
-                  hoverable
-                  onClick={() => navigate(`/canvas/${canvas.id}`)}
-                  style={{
-                    background: token.colorBgContainer,
-                    borderColor: token.colorBorder,
-                  }}
-                  styles={{
-                    body: { padding: 16 },
-                  }}
-                  cover={
-                    <div
-                      style={{
-                        height: 120,
-                        background: token.colorBgElevated,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        borderBottom: `1px solid ${token.colorBorder}`,
-                      }}
-                    >
-                      <EditOutlined style={{ fontSize: 32, color: token.colorTextTertiary }} />
-                    </div>
-                  }
-                  actions={[
-                    <Popconfirm
-                      key="delete"
-                      title="Delete canvas"
-                      description="Are you sure you want to delete this canvas?"
-                      onConfirm={(e) => {
-                        e?.stopPropagation()
-                        deleteCanvas(canvas.id)
-                      }}
-                      onCancel={(e) => e?.stopPropagation()}
-                      okText="Delete"
-                      cancelText="Cancel"
-                      okButtonProps={{ danger: true }}
-                    >
+                <TiltCard onClick={() => navigate(`/canvas/${canvas.id}`)}>
+                  <Card
+                    hoverable
+                    style={{
+                      background: token.colorBgContainer,
+                      borderColor: token.colorBorder,
+                    }}
+                    styles={{
+                      body: { padding: 16 },
+                    }}
+                    cover={
+                      <div
+                        style={{
+                          height: 120,
+                          background: token.colorBgElevated,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          borderBottom: `1px solid ${token.colorBorder}`,
+                        }}
+                      >
+                        <EditOutlined style={{ fontSize: 32, color: token.colorTextTertiary }} />
+                      </div>
+                    }
+                    actions={[
                       <Button
+                        key="delete"
                         type="text"
                         danger
                         icon={<DeleteOutlined />}
-                        onClick={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          confirmDeleteCanvas(canvas.id, canvas.name, e)
+                        }}
                         size="small"
                       >
                         Delete
-                      </Button>
-                    </Popconfirm>,
-                  ]}
-                >
-                  <Card.Meta
-                    title={
-                      <Text ellipsis style={{ color: token.colorText }}>
-                        {canvas.name}
-                      </Text>
-                    }
-                    description={
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        {formatDate(canvas.updatedAt)}
-                      </Text>
-                    }
-                  />
-                </Card>
+                      </Button>,
+                    ]}
+                  >
+                    <Card.Meta
+                      title={
+                        <Text ellipsis style={{ color: token.colorText }}>
+                          {canvas.name}
+                        </Text>
+                      }
+                      description={
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          {formatDate(canvas.updatedAt)}
+                        </Text>
+                      }
+                    />
+                  </Card>
+                </TiltCard>
               </Col>
             ))}
           </Row>
         )}
       </Content>
+
     </Layout>
   )
 }

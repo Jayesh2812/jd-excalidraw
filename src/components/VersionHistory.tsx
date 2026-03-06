@@ -29,7 +29,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase'
 
-const { Title, Text } = Typography
+const { Text } = Typography
 
 interface Version {
   id: string

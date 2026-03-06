@@ -14,6 +14,8 @@ import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { VersionHistory, SaveVersionButton } from './VersionHistory'
+import { convertElementColorsForPreview } from '../utils/colorUtils'
+import { compressSvg } from '../utils/svgUtils'
 
 const { Header } = Layout
 const { Title, Text } = Typography
@@ -81,21 +83,6 @@ export function CanvasEditor() {
     }
   }
 
-  // Helper to check if a color is dark
-  const isColorDark = (color: string): boolean => {
-    if (!color || color === 'transparent') return false
-    // Handle hex colors
-    const hex = color.replace('#', '')
-    if (hex.length === 6) {
-      const r = parseInt(hex.substring(0, 2), 16)
-      const g = parseInt(hex.substring(2, 4), 16)
-      const b = parseInt(hex.substring(4, 6), 16)
-      const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
-      return luminance < 0.5
-    }
-    return false
-  }
-
   // Generate SVG preview from current canvas state
   const generatePreview = useCallback(async (): Promise<string | null> => {
     const api = excalidrawAPIRef.current
@@ -110,19 +97,8 @@ export function CanvasEditor() {
       // Skip preview generation if canvas is empty
       if (!elements || elements.length === 0) return null
 
-      // Clone elements and change dark colors to light for preview
-      const previewElements = elements.map((el: any) => {
-        const clone = { ...el }
-        // If stroke color is dark, make it white
-        if (clone.strokeColor && isColorDark(clone.strokeColor)) {
-          clone.strokeColor = '#ffffff'
-        }
-        // If background color is dark (but not transparent), make it light gray
-        if (clone.backgroundColor && clone.backgroundColor !== 'transparent' && isColorDark(clone.backgroundColor)) {
-          clone.backgroundColor = '#cccccc'
-        }
-        return clone
-      })
+      // Convert dark colors to light for preview visibility
+      const previewElements = elements.map(convertElementColorsForPreview)
 
       const svg = await exportToSvg({
         elements: previewElements,
@@ -133,16 +109,35 @@ export function CanvasEditor() {
         files,
       })
 
-      // Serialize SVG to string
+      // Serialize and compress SVG
       const svgString = new XMLSerializer().serializeToString(svg)
-      return svgString
+      return compressSvg(svgString)
     } catch (err) {
       console.error('Error generating preview:', err)
       return null
     }
   }, [])
 
-  // Actual save function
+  // Save preview to Firestore (called less frequently than content save)
+  const savePreview = useCallback(async () => {
+    if (!user || !canvasId) return
+    
+    try {
+      const preview = await generatePreview()
+      if (preview) {
+        const docRef = doc(db, 'users', user.uid, 'canvases', canvasId)
+        await updateDoc(docRef, { preview })
+      }
+    } catch (err) {
+      console.error('Error saving preview:', err)
+    }
+  }, [user, canvasId, generatePreview])
+
+  // Ref for preview debounce
+  const previewDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const PREVIEW_DEBOUNCE_DELAY = 10000 // 10 seconds - much less frequent than content save
+
+  // Actual save function (content only, preview saved separately)
   const performSave = useCallback(async (stateHash: string) => {
     if (!user || !canvasId) return
 
@@ -151,12 +146,8 @@ export function CanvasEditor() {
     try {
       const docRef = doc(db, 'users', user.uid, 'canvases', canvasId)
       
-      // Generate preview SVG
-      const preview = await generatePreview()
-      
       await updateDoc(docRef, {
         content: stateHash,
-        ...(preview && { preview }), // Only update preview if generated
         updatedAt: serverTimestamp(),
       })
       
@@ -167,11 +158,19 @@ export function CanvasEditor() {
       
       setSaveStatus('saved')
       setTimeout(() => setSaveStatus('idle'), 2000)
+
+      // Schedule preview save with longer debounce
+      if (previewDebounceRef.current) {
+        clearTimeout(previewDebounceRef.current)
+      }
+      previewDebounceRef.current = setTimeout(() => {
+        savePreview()
+      }, PREVIEW_DEBOUNCE_DELAY)
     } catch (err) {
       console.error('Error saving canvas:', err)
       setSaveStatus('idle')
     }
-  }, [user, canvasId, generatePreview])
+  }, [user, canvasId, savePreview])
 
   // Hybrid throttle + debounce save strategy
   const saveCanvas = useCallback(
@@ -304,19 +303,24 @@ export function CanvasEditor() {
     return () => {
       if (debounceTimeoutRef.current) clearTimeout(debounceTimeoutRef.current)
       if (throttleTimeoutRef.current) clearTimeout(throttleTimeoutRef.current)
+      if (previewDebounceRef.current) clearTimeout(previewDebounceRef.current)
       if (pendingStateRef.current && hasUnsavedChangesRef.current) {
         performSave(pendingStateRef.current)
       }
+      // Save preview on unmount
+      savePreview()
     }
-  }, [performSave])
+  }, [performSave, savePreview])
 
-  const handleBack = useCallback(() => {
+  const handleBack = useCallback(async () => {
     if (hasUnsavedChangesRef.current) {
       const confirmed = window.confirm('You have unsaved changes. Are you sure you want to leave?')
       if (!confirmed) return
     }
+    // Save preview before navigating away
+    await savePreview()
     navigate('/')
-  }, [navigate])
+  }, [navigate, savePreview])
 
   const handleRestoreVersion = useCallback(async (content: string) => {
     try {

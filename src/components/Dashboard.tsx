@@ -39,6 +39,8 @@ import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { Logo } from './Logo'
 import { TiltCard } from './TiltCard'
+import { convertElementColorsForPreview } from '../utils/colorUtils'
+import { compressSvg } from '../utils/svgUtils'
 
 const { Header, Content } = Layout
 const { Text } = Typography
@@ -66,20 +68,6 @@ export function Dashboard() {
   const { token } = theme.useToken()
   const { modal, message } = App.useApp()
 
-  // Helper to check if a color is dark
-  const isColorDark = (color: string): boolean => {
-    if (!color || color === 'transparent') return false
-    const hex = color.replace('#', '')
-    if (hex.length === 6) {
-      const r = parseInt(hex.substring(0, 2), 16)
-      const g = parseInt(hex.substring(2, 4), 16)
-      const b = parseInt(hex.substring(4, 6), 16)
-      const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
-      return luminance < 0.5
-    }
-    return false
-  }
-
   // Generate preview for a canvas that doesn't have one
   const generatePreviewForCanvas = useCallback(async (canvas: Canvas) => {
     if (!user || !canvas.content) return
@@ -95,17 +83,8 @@ export function Dashboard() {
       generatingRef.current.add(canvas.id)
       setGeneratingIds(Array.from(generatingRef.current))
 
-      // Clone elements and change dark colors to light for preview
-      const previewElements = elements.map((el: any) => {
-        const clone = { ...el }
-        if (clone.strokeColor && isColorDark(clone.strokeColor)) {
-          clone.strokeColor = '#ffffff'
-        }
-        if (clone.backgroundColor && clone.backgroundColor !== 'transparent' && isColorDark(clone.backgroundColor)) {
-          clone.backgroundColor = '#cccccc'
-        }
-        return clone
-      })
+      // Convert dark colors to light for preview visibility
+      const previewElements = elements.map(convertElementColorsForPreview)
 
       const svg = await exportToSvg({
         elements: previewElements,
@@ -116,7 +95,8 @@ export function Dashboard() {
         files: parsed.files || {},
       })
 
-      const svgString = new XMLSerializer().serializeToString(svg)
+      // Serialize and compress SVG
+      const svgString = compressSvg(new XMLSerializer().serializeToString(svg))
       
       // Store in local state for immediate display
       setGeneratedPreviews(prev => ({ ...prev, [canvas.id]: svgString }))

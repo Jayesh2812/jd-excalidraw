@@ -29,7 +29,7 @@ body {
   
   /* Show on mobile only */
   .show-on-mobile-only {
-    display: inline !important;
+    display: inline-flex !important;
   }
   
   /* Reduce header padding */

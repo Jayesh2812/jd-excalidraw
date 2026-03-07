@@ -17,6 +17,7 @@ import {
   Tabs,
   Dropdown,
   Badge,
+  Modal,
 } from 'antd'
 import { ExclamationCircleOutlined } from '@ant-design/icons'
 import {
@@ -107,6 +108,7 @@ export function Dashboard() {
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null) // null = All canvases
   const [newFolderName, setNewFolderName] = useState('')
   const [isCreatingFolder, setIsCreatingFolder] = useState(false)
+  const [isFolderModalOpen, setIsFolderModalOpen] = useState(false)
   const generatingRef = useRef<Set<string>>(new Set())
   const { token } = theme.useToken()
   const { modal, message } = App.useApp()
@@ -465,31 +467,45 @@ export function Dashboard() {
             activeKey={selectedFolderId || 'all'}
             onChange={(key) => setSelectedFolderId(key === 'all' ? null : key)}
             tabBarExtraContent={
-              <Input
-                placeholder="New folder"
-                value={newFolderName}
-                onChange={(e) => setNewFolderName(e.target.value)}
-                onPressEnter={createFolder}
-                prefix={<FolderAddOutlined style={{ color: token.colorTextTertiary }} />}
-                suffix={
-                  newFolderName.trim() ? (
-                    <Button
-                      type="text"
-                      size="small"
-                      loading={isCreatingFolder}
-                      onClick={createFolder}
-                      style={{ margin: -4, height: 22, width: 22, minWidth: 22 }}
-                      icon={<PlusOutlined style={{ fontSize: 12 }} />}
-                    />
-                  ) : null
-                }
-                style={{ 
-                  width: newFolderName ? 160 : 120,
-                  transition: 'width 0.2s ease',
-                }}
-                size="small"
-                variant="filled"
-              />
+              <>
+                {/* Desktop: full input */}
+                <Input
+                  placeholder="New folder"
+                  value={newFolderName}
+                  onChange={(e) => setNewFolderName(e.target.value)}
+                  onPressEnter={createFolder}
+                  prefix={<FolderAddOutlined style={{ color: token.colorTextTertiary }} />}
+                  suffix={
+                    newFolderName.trim() ? (
+                      <Button
+                        type="text"
+                        size="small"
+                        loading={isCreatingFolder}
+                        onClick={createFolder}
+                        style={{ margin: -4, height: 22, width: 22, minWidth: 22 }}
+                        icon={<PlusOutlined style={{ fontSize: 12 }} />}
+                      />
+                    ) : null
+                  }
+                  style={{ 
+                    width: newFolderName ? 160 : 120,
+                    transition: 'width 0.2s ease',
+                  }}
+                  size="small"
+                  variant="filled"
+                  className="hide-on-mobile"
+                />
+                {/* Mobile: just icon button */}
+                <Tooltip title="New folder">
+                  <Button
+                    type="text"
+                    icon={<FolderAddOutlined />}
+                    size="small"
+                    className="show-on-mobile-only"
+                    onClick={() => setIsFolderModalOpen(true)}
+                  />
+                </Tooltip>
+              </>
             }
             items={[
               {
@@ -827,6 +843,34 @@ export function Dashboard() {
         )}
       </Content>
 
+      {/* Mobile folder creation modal */}
+      <Modal
+        title="New Folder"
+        open={isFolderModalOpen}
+        onOk={async () => {
+          await createFolder()
+          setIsFolderModalOpen(false)
+        }}
+        onCancel={() => {
+          setNewFolderName('')
+          setIsFolderModalOpen(false)
+        }}
+        okText="Create"
+        okButtonProps={{ disabled: !newFolderName.trim(), loading: isCreatingFolder }}
+        centered
+        destroyOnClose
+      >
+        <Input
+          placeholder="Enter folder name"
+          value={newFolderName}
+          onChange={(e) => setNewFolderName(e.target.value)}
+          onPressEnter={async () => {
+            await createFolder()
+            setIsFolderModalOpen(false)
+          }}
+          autoFocus
+        />
+      </Modal>
     </Layout>
   )
 }

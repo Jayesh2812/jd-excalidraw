@@ -225,7 +225,9 @@ export function Dashboard() {
           appState: {},
           files: {},
         }),
-        folderId: selectedFolderId, // Add to current folder
+        // If in starred view, don't set folderId but set starred flag
+        folderId: selectedFolderId === 'starred' ? null : selectedFolderId,
+        starred: selectedFolderId === 'starred' ? true : false,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       }
@@ -763,7 +765,12 @@ export function Dashboard() {
                       <Dropdown
                         key="more"
                         trigger={['click']}
+                        getPopupContainer={() => document.body}
                         menu={{
+                          onClick: (e) => {
+                            e.domEvent.stopPropagation()
+                            e.domEvent.preventDefault()
+                          },
                           items: [
                             {
                               key: 'move',
@@ -773,13 +780,19 @@ export function Dashboard() {
                                 {
                                   key: 'move-root',
                                   label: 'All Canvases',
-                                  onClick: () => moveCanvasToFolder(canvas.id, null),
+                                  onClick: (e) => {
+                                    e.domEvent.stopPropagation()
+                                    moveCanvasToFolder(canvas.id, null)
+                                  },
                                   disabled: !canvas.folderId,
                                 },
                                 ...folders.map((folder) => ({
                                   key: `move-${folder.id}`,
                                   label: folder.name,
-                                  onClick: () => moveCanvasToFolder(canvas.id, folder.id),
+                                  onClick: (e: any) => {
+                                    e.domEvent.stopPropagation()
+                                    moveCanvasToFolder(canvas.id, folder.id)
+                                  },
                                   disabled: canvas.folderId === folder.id,
                                 })),
                               ],
@@ -790,7 +803,8 @@ export function Dashboard() {
                               label: 'Delete',
                               icon: <DeleteOutlined />,
                               danger: true,
-                              onClick: () => {
+                              onClick: (e: any) => {
+                                e.domEvent.stopPropagation()
                                 modal.confirm({
                                   title: 'Delete canvas',
                                   icon: <ExclamationCircleOutlined />,
@@ -818,6 +832,7 @@ export function Dashboard() {
                           type="text"
                           icon={<MoreOutlined />}
                           onClick={(e) => e.stopPropagation()}
+                          onTouchEnd={(e) => e.stopPropagation()}
                           size="small"
                         />
                       </Dropdown>,

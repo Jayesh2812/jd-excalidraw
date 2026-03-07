@@ -6,6 +6,7 @@ import {
   HistoryOutlined,
   LoadingOutlined,
   CheckOutlined,
+  ForkOutlined,
 } from '@ant-design/icons'
 import { Excalidraw, exportToSvg } from '@excalidraw/excalidraw'
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
@@ -22,11 +23,19 @@ const VersionHistory = lazy(() => import('./VersionHistory').then(m => ({ defaul
 const { Header } = Layout
 const { Title, Text } = Typography
 
+interface ForkedFrom {
+  canvasId: string
+  userId: string
+  userName: string
+  canvasName: string
+}
+
 interface CanvasData {
   name: string
   elements: readonly any[]
   appState: any
   files: any
+  forkedFrom?: ForkedFrom
 }
 
 // Hybrid throttle + debounce configuration
@@ -260,6 +269,7 @@ export function CanvasEditor() {
               elements: parsed.elements || [],
               appState: parsed.appState || {},
               files: parsed.files || {},
+              forkedFrom: docData.forkedFrom,
             }
           } else {
             canvasContent = {
@@ -267,6 +277,7 @@ export function CanvasEditor() {
               elements: docData.elements || [],
               appState: docData.appState || {},
               files: docData.files || {},
+              forkedFrom: docData.forkedFrom,
             }
           }
           
@@ -510,6 +521,12 @@ export function CanvasEditor() {
             >
               {canvasData?.name || 'Untitled'}
             </Title>
+          )}
+          {canvasData?.forkedFrom && (
+            <Text type="secondary" className="hide-on-mobile" style={{ fontSize: 11 }}>
+              <ForkOutlined style={{ marginRight: 4 }} />
+              from {canvasData.forkedFrom.userName}
+            </Text>
           )}
         </Space>
 

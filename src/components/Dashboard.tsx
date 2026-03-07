@@ -13,6 +13,7 @@ import {
   Col,
   App,
   theme,
+  Tooltip,
 } from 'antd'
 import { ExclamationCircleOutlined } from '@ant-design/icons'
 import {
@@ -22,6 +23,10 @@ import {
   LogoutOutlined,
   UserOutlined,
   LoadingOutlined,
+  ShareAltOutlined,
+  StopOutlined,
+  GlobalOutlined,
+  ForkOutlined,
 } from '@ant-design/icons'
 import {
   collection,
@@ -44,11 +49,21 @@ import { compressSvg } from '../utils/svgUtils'
 const { Header, Content } = Layout
 const { Text } = Typography
 
+interface ForkedFrom {
+  canvasId: string
+  userId: string
+  userName: string
+  canvasName: string
+}
+
 interface Canvas {
   id: string
   name: string
   content?: string  // JSON string of canvas data
   preview?: string  // SVG string for canvas preview
+  isShared?: boolean
+  sharedAt?: any
+  forkedFrom?: ForkedFrom
   createdAt: any
   updatedAt: any
 }
@@ -194,6 +209,38 @@ export function Dashboard() {
     })
   }
 
+  const toggleShare = async (canvas: Canvas, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!user) return
+
+    try {
+      const docRef = doc(db, 'users', user.uid, 'canvases', canvas.id)
+      
+      if (canvas.isShared) {
+        // Unshare
+        await updateDoc(docRef, {
+          isShared: false,
+          sharedAt: null,
+          ownerName: null,
+          ownerPhoto: null,
+        })
+        message.success('Canvas unshared')
+      } else {
+        // Share
+        await updateDoc(docRef, {
+          isShared: true,
+          sharedAt: serverTimestamp(),
+          ownerName: user.displayName || user.email || 'Anonymous',
+          ownerPhoto: user.photoURL || '',
+        })
+        message.success('Canvas shared to gallery!')
+      }
+    } catch (error) {
+      console.error('Error toggling share:', error)
+      message.error('Failed to update sharing')
+    }
+  }
+
   const formatDate = (timestamp: any) => {
     if (!timestamp) return 'Just now'
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp)
@@ -221,7 +268,18 @@ export function Dashboard() {
           zIndex: 100,
         }}
       >
-<Logo size={28} />
+<Space>
+          <Logo size={28} />
+          <Button
+            type="text"
+            icon={<GlobalOutlined />}
+            onClick={() => navigate('/gallery')}
+            style={{ color: token.colorTextSecondary }}
+            className="mobile-icon-only"
+          >
+            <span className="hide-on-mobile">Gallery</span>
+          </Button>
+        </Space>
         <Space size="small">
           {user?.photoURL ? (
             <Avatar
@@ -377,8 +435,33 @@ export function Dashboard() {
                           justifyContent: 'center',
                           borderBottom: `1px solid ${token.colorBorder}`,
                           overflow: 'hidden',
+                          position: 'relative',
                         }}
                       >
+                        {/* Forked badge */}
+                        {canvas.forkedFrom && (
+                          <Tooltip title={`Forked from ${canvas.forkedFrom.userName}`}>
+                            <div
+                              style={{
+                                position: 'absolute',
+                                top: 8,
+                                right: 8,
+                                background: token.colorBgContainer,
+                                borderRadius: '50%',
+                                width: 32,
+                                height: 32,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                border: `1px solid ${token.colorBorder}`,
+                                zIndex: 1,
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <ForkOutlined style={{ fontSize: 16, color: token.colorTextSecondary }} />
+                            </div>
+                          </Tooltip>
+                        )}
                         {(() => {
                           const previewSvg = canvas.preview || generatedPreviews[canvas.id]
                           const isGenerating = generatingIds.includes(canvas.id)
@@ -412,6 +495,16 @@ export function Dashboard() {
                       </div>
                     }
                     actions={[
+                      <Button
+                        key="share"
+                        type="text"
+                        icon={canvas.isShared ? <StopOutlined /> : <ShareAltOutlined />}
+                        onClick={(e) => toggleShare(canvas, e)}
+                        size="small"
+                        style={canvas.isShared ? { color: token.colorSuccess } : {}}
+                      >
+                        {canvas.isShared ? 'Shared' : 'Share'}
+                      </Button>,
                       <Button
                         key="delete"
                         type="text"

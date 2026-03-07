@@ -9,6 +9,8 @@ import './App.css'
 // Lazy load heavy components for code splitting
 const Dashboard = lazy(() => import('./components/Dashboard').then(m => ({ default: m.Dashboard })))
 const CanvasEditor = lazy(() => import('./components/CanvasEditor').then(m => ({ default: m.CanvasEditor })))
+const SharedGallery = lazy(() => import('./components/SharedGallery').then(m => ({ default: m.SharedGallery })))
+const SharedCanvasViewer = lazy(() => import('./components/SharedCanvasViewer').then(m => ({ default: m.SharedCanvasViewer })))
 
 const { Text } = Typography
 
@@ -92,6 +94,22 @@ function App() {
           element={
             <ProtectedRoute>
               <CanvasEditor />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/gallery"
+          element={
+            <ProtectedRoute>
+              <SharedGallery />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/shared/:userId/:canvasId"
+          element={
+            <ProtectedRoute>
+              <SharedCanvasViewer />
             </ProtectedRoute>
           }
         />

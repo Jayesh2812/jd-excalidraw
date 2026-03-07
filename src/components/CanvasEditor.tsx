@@ -1,12 +1,14 @@
 import { useEffect, useState, useRef, useCallback, lazy, Suspense } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Layout, Button, Typography, Spin, Space, Input, theme } from 'antd'
+import { Layout, Button, Typography, Spin, Space, Input, theme, Tooltip } from 'antd'
 import {
   ArrowLeftOutlined,
   HistoryOutlined,
   LoadingOutlined,
   CheckOutlined,
   ForkOutlined,
+  WifiOutlined,
+  CloudSyncOutlined,
 } from '@ant-design/icons'
 import { Excalidraw, exportToSvg } from '@excalidraw/excalidraw'
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
@@ -16,6 +18,12 @@ import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { SaveVersionButton } from './VersionHistory'
 import { compressSvg } from '../utils/svgUtils'
+import {
+  saveCanvasOffline,
+  getCanvasOffline,
+  isOnline,
+  onOnlineStatusChange,
+} from '../utils/offlineStorage'
 
 // Lazy load VersionHistory sidebar (only shown when opened)
 const VersionHistory = lazy(() => import('./VersionHistory').then(m => ({ default: m.VersionHistory })))
@@ -54,6 +62,7 @@ export function CanvasEditor() {
   const [excalidrawKey, setExcalidrawKey] = useState(0)
   const [isEditingName, setIsEditingName] = useState(false)
   const [editedName, setEditedName] = useState('')
+  const [online, setOnline] = useState(isOnline())
   const { token } = theme.useToken()
   
   // Excalidraw API ref for generating previews
@@ -160,12 +169,27 @@ export function CanvasEditor() {
     setSaveStatus('saving')
     
     try {
-      const docRef = doc(db, 'users', user.uid, 'canvases', canvasId)
-      
-      await updateDoc(docRef, {
-        content: stateHash,
-        updatedAt: serverTimestamp(),
-      })
+      if (isOnline()) {
+        // Online: save to Firestore
+        const docRef = doc(db, 'users', user.uid, 'canvases', canvasId)
+        
+        await updateDoc(docRef, {
+          content: stateHash,
+          updatedAt: serverTimestamp(),
+        })
+        
+        // Also cache locally
+        await saveCanvasOffline(user.uid, canvasId, {
+          ...canvasData,
+          content: stateHash,
+        }, false)
+      } else {
+        // Offline: save to IndexedDB with pending sync flag
+        await saveCanvasOffline(user.uid, canvasId, {
+          ...canvasData,
+          content: stateHash,
+        }, true)
+      }
       
       lastSavedHashRef.current = stateHash
       lastSaveTimeRef.current = Date.now()
@@ -175,18 +199,20 @@ export function CanvasEditor() {
       setSaveStatus('saved')
       setTimeout(() => setSaveStatus('idle'), 2000)
 
-      // Schedule preview save with longer debounce
-      if (previewDebounceRef.current) {
-        clearTimeout(previewDebounceRef.current)
+      // Schedule preview save with longer debounce (only if online)
+      if (isOnline()) {
+        if (previewDebounceRef.current) {
+          clearTimeout(previewDebounceRef.current)
+        }
+        previewDebounceRef.current = setTimeout(() => {
+          savePreview()
+        }, PREVIEW_DEBOUNCE_DELAY)
       }
-      previewDebounceRef.current = setTimeout(() => {
-        savePreview()
-      }, PREVIEW_DEBOUNCE_DELAY)
     } catch (err) {
       console.error('Error saving canvas:', err)
       setSaveStatus('idle')
     }
-  }, [user, canvasId, savePreview])
+  }, [user, canvasId, canvasData, savePreview])
 
   // Hybrid throttle + debounce save strategy
   const saveCanvas = useCallback(
@@ -249,38 +275,79 @@ export function CanvasEditor() {
     [user, canvasId, performSave]
   )
 
+  // Listen for online/offline status changes
+  useEffect(() => {
+    const cleanup = onOnlineStatusChange((status) => {
+      setOnline(status)
+    })
+    return cleanup
+  }, [])
+
   // Load canvas data
   useEffect(() => {
     if (!user || !canvasId) return
 
     const loadCanvas = async () => {
       try {
-        const docRef = doc(db, 'users', user.uid, 'canvases', canvasId)
-        const docSnap = await getDoc(docRef)
+        let canvasContent: CanvasData | null = null
 
-        if (docSnap.exists()) {
-          const docData = docSnap.data()
-          
-          let canvasContent: CanvasData
-          if (docData.content) {
-            const parsed = JSON.parse(docData.content)
-            canvasContent = {
-              name: docData.name,
-              elements: parsed.elements || [],
-              appState: parsed.appState || {},
-              files: parsed.files || {},
-              forkedFrom: docData.forkedFrom,
+        if (isOnline()) {
+          // Online: load from Firestore
+          const docRef = doc(db, 'users', user.uid, 'canvases', canvasId)
+          const docSnap = await getDoc(docRef)
+
+          if (docSnap.exists()) {
+            const docData = docSnap.data()
+            
+            if (docData.content) {
+              const parsed = JSON.parse(docData.content)
+              canvasContent = {
+                name: docData.name,
+                elements: parsed.elements || [],
+                appState: parsed.appState || {},
+                files: parsed.files || {},
+                forkedFrom: docData.forkedFrom,
+              }
+            } else {
+              canvasContent = {
+                name: docData.name,
+                elements: docData.elements || [],
+                appState: docData.appState || {},
+                files: docData.files || {},
+                forkedFrom: docData.forkedFrom,
+              }
             }
-          } else {
-            canvasContent = {
-              name: docData.name,
-              elements: docData.elements || [],
-              appState: docData.appState || {},
-              files: docData.files || {},
-              forkedFrom: docData.forkedFrom,
+
+            // Cache locally
+            await saveCanvasOffline(user.uid, canvasId, { ...docData, id: canvasId }, false)
+          }
+        } else {
+          // Offline: try to load from IndexedDB
+          const offlineCanvas = await getCanvasOffline(canvasId)
+          if (offlineCanvas) {
+            const docData = offlineCanvas.data
+            if (docData.content) {
+              const parsed = JSON.parse(docData.content)
+              canvasContent = {
+                name: docData.name,
+                elements: parsed.elements || [],
+                appState: parsed.appState || {},
+                files: parsed.files || {},
+                forkedFrom: docData.forkedFrom,
+              }
+            } else {
+              canvasContent = {
+                name: docData.name || 'Untitled',
+                elements: docData.elements || [],
+                appState: docData.appState || {},
+                files: docData.files || {},
+                forkedFrom: docData.forkedFrom,
+              }
             }
           }
-          
+        }
+
+        if (canvasContent) {
           setCanvasData(canvasContent)
           const contentHash = JSON.stringify({
             elements: canvasContent.elements,
@@ -534,19 +601,30 @@ export function CanvasEditor() {
           {saveStatus === 'saving' && (
             <Space size={4} style={{ color: token.colorTextSecondary }}>
               <LoadingOutlined />
-              <Text className="hide-on-mobile" style={{ color: token.colorTextSecondary }}>Saving...</Text>
+              <Text className="hide-on-mobile" style={{ color: token.colorTextSecondary }}>
+                Saving...
+              </Text>
             </Space>
           )}
           {saveStatus === 'saved' && (
             <Space size={4} style={{ color: token.colorSuccess }}>
               <CheckOutlined />
-              <Text className="hide-on-mobile" style={{ color: token.colorSuccess }}>Saved</Text>
+              <Text className="hide-on-mobile" style={{ color: token.colorSuccess }}>
+                Saved
+              </Text>
             </Space>
+          )}
+          {/* Offline indicator - positioned after save status to avoid jumps */}
+          {!online && (
+            <Tooltip title="You are offline. Changes will sync when back online.">
+              <WifiOutlined style={{ fontSize: 16, color: token.colorWarning }} />
+            </Tooltip>
           )}
           <Button
             type={isVersionSidebarOpen ? 'primary' : 'text'}
             icon={<HistoryOutlined />}
             onClick={toggleVersionSidebar}
+            disabled={!online} // Disable history when offline
             style={isVersionSidebarOpen ? {
               background: token.colorText,
               color: token.colorBgContainer,

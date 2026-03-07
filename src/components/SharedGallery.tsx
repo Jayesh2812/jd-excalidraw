@@ -252,7 +252,7 @@ export function SharedGallery() {
                       borderColor: token.colorBorder,
                     }}
                     styles={{
-                      body: { padding: 16 },
+                      body: { padding: 12 },
                     }}
                     cover={
                       <div
@@ -331,36 +331,34 @@ export function SharedGallery() {
                     }
                   >
                     <Card.Meta
-                      avatar={
-                        canvas.userPhoto ? (
-                          <Avatar
-                            src={
-                              <img
-                                src={canvas.userPhoto}
-                                alt="avatar"
-                                referrerPolicy="no-referrer"
-                              />
-                            }
-                            size="small"
-                          />
-                        ) : (
-                          <Avatar icon={<UserOutlined />} size="small" />
-                        )
-                      }
                       title={
                         <Text ellipsis style={{ color: token.colorText }}>
                           {canvas.name}
                         </Text>
                       }
                       description={
-                        <Space direction="vertical" size={0}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {canvas.userPhoto ? (
+                            <Avatar
+                              src={
+                                <img
+                                  src={canvas.userPhoto}
+                                  alt="avatar"
+                                  referrerPolicy="no-referrer"
+                                />
+                              }
+                              size={18}
+                            />
+                          ) : (
+                            <Avatar icon={<UserOutlined />} size={18} />
+                          )}
                           <Text type="secondary" style={{ fontSize: 12 }}>
-                            by {canvas.userName}
+                            {canvas.userId === user?.uid ? 'You' : canvas.userName}
                           </Text>
                           <Text type="secondary" style={{ fontSize: 11 }}>
-                            {formatDate(canvas.sharedAt)}
+                            · {formatDate(canvas.sharedAt)}
                           </Text>
-                        </Space>
+                        </div>
                       }
                     />
                   </Card>

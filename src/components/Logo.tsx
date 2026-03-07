@@ -5,12 +5,13 @@ interface LogoProps {
 
 export function Logo({ size = 32, showText = true }: LogoProps) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: size }}>
       <svg
         width={size}
         height={size}
         viewBox="0 0 512 512"
         xmlns="http://www.w3.org/2000/svg"
+        style={{ flexShrink: 0 }}
       >
         {/* Background */}
         <rect width="512" height="512" rx="96" fill="#0a0a0a" />
@@ -35,10 +36,11 @@ export function Logo({ size = 32, showText = true }: LogoProps) {
       {showText && (
         <span
           style={{
-            fontSize: size * 0.75,
+            fontSize: 18,
             fontWeight: 600,
             color: '#ffffff',
             letterSpacing: '-0.02em',
+            lineHeight: 1,
           }}
         >
           Monobook

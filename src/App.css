@@ -5,6 +5,7 @@
   align-items: center;
   justify-content: center;
   background: #0a0a0a;
+  padding: 16px;
 }
 
 .login-page__card {
@@ -12,6 +13,7 @@
   border: 1px solid #303030 !important;
   padding: 24px;
   min-width: 320px;
+  max-width: 100%;
 }
 
 /* App Loader */
@@ -21,4 +23,13 @@
   align-items: center;
   justify-content: center;
   background: #0a0a0a;
+}
+
+/* Mobile responsive */
+@media (max-width: 576px) {
+  .login-page__card {
+    min-width: auto;
+    width: 100%;
+    padding: 20px 16px;
+  }
 }

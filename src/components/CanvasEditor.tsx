@@ -456,14 +456,14 @@ export function CanvasEditor() {
           lineHeight: '48px',
         }}
       >
-        <Space>
+        <Space size="small">
           <Button
             type="text"
             icon={<ArrowLeftOutlined />}
             onClick={handleBack}
             style={{ color: token.colorText }}
           >
-            Back
+            <span className="hide-on-mobile">Back</span>
           </Button>
           {isEditingName ? (
             <Input
@@ -479,11 +479,12 @@ export function CanvasEditor() {
               autoFocus
               variant="borderless"
               style={{
-                fontSize: 16,
+                fontSize: 14,
                 fontWeight: 600,
                 color: token.colorText,
                 padding: '0 4px',
-                width: 200,
+                width: 150,
+                maxWidth: '40vw',
                 background: token.colorBgElevated,
                 borderRadius: token.borderRadius,
               }}
@@ -495,11 +496,12 @@ export function CanvasEditor() {
               style={{
                 margin: 0,
                 color: token.colorText,
-                maxWidth: 300,
+                maxWidth: '40vw',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
                 cursor: 'pointer',
+                fontSize: 14,
               }}
             >
               {canvasData?.name || 'Untitled'}
@@ -507,17 +509,17 @@ export function CanvasEditor() {
           )}
         </Space>
 
-        <Space>
+        <Space size="small">
           {saveStatus === 'saving' && (
-            <Space style={{ color: token.colorTextSecondary }}>
+            <Space size={4} style={{ color: token.colorTextSecondary }}>
               <LoadingOutlined />
-              <Text style={{ color: token.colorTextSecondary }}>Saving...</Text>
+              <Text className="hide-on-mobile" style={{ color: token.colorTextSecondary }}>Saving...</Text>
             </Space>
           )}
           {saveStatus === 'saved' && (
-            <Space style={{ color: token.colorSuccess }}>
+            <Space size={4} style={{ color: token.colorSuccess }}>
               <CheckOutlined />
-              <Text style={{ color: token.colorSuccess }}>Saved</Text>
+              <Text className="hide-on-mobile" style={{ color: token.colorSuccess }}>Saved</Text>
             </Space>
           )}
           <Button
@@ -531,7 +533,7 @@ export function CanvasEditor() {
               color: token.colorText,
             }}
           >
-            History
+            <span className="hide-on-mobile">History</span>
           </Button>
         </Space>
       </Header>

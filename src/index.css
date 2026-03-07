@@ -14,3 +14,26 @@ body {
 * {
   transition: background-color 0.2s ease, border-color 0.2s ease;
 }
+
+/* Mobile responsive utilities */
+@media (max-width: 576px) {
+  /* Hide on mobile */
+  .hide-on-mobile {
+    display: none !important;
+  }
+  
+  /* Reduce header padding */
+  .ant-layout-header {
+    padding: 0 12px !important;
+  }
+  
+  /* Reduce content padding */
+  .ant-layout-content {
+    padding: 12px !important;
+  }
+  
+  /* Smaller buttons on mobile */
+  .mobile-icon-only .ant-btn-text span:not(.anticon) {
+    display: none;
+  }
+}

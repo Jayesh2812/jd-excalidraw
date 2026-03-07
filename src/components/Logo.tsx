@@ -15,7 +15,7 @@ export function Logo({ size = 32, showText = true }: LogoProps) {
         {/* Background */}
         <rect width="512" height="512" rx="96" fill="#0a0a0a" />
 
-        {/* Open book / M shape */}
+        {/* M shape with book bottom */}
         <g
           fill="none"
           stroke="#ffffff"
@@ -23,15 +23,13 @@ export function Logo({ size = 32, showText = true }: LogoProps) {
           strokeLinecap="round"
           strokeLinejoin="round"
         >
-          {/* Left side of M / book spine */}
-          <path d="M140 360 L140 152 L256 232 L372 152 L372 360" />
-
-          {/* Center line (pen/pencil) */}
-          <line x1="256" y1="232" x2="256" y2="360" />
+          {/* M shape */}
+          <path d="M140 310 L140 122 L256 202 L372 122 L372 310" />
+          {/* Center spine */}
+          <line x1="256" y1="202" x2="256" y2="390" />
+          {/* Book bottom */}
+          <path d="M140 312 L256 390 L372 312" />
         </g>
-
-        {/* Pen tip dot */}
-        <circle cx="256" cy="380" r="14" fill="#ffffff" />
       </svg>
 
       {showText && (

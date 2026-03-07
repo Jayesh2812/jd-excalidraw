@@ -223,7 +223,7 @@ export function Dashboard() {
         }}
       >
 <Logo size={28} />
-        <Space>
+        <Space size="small">
           {user?.photoURL ? (
             <Avatar
               src={
@@ -238,7 +238,7 @@ export function Dashboard() {
           ) : (
             <Avatar icon={<UserOutlined />} style={{ backgroundColor: '#303030' }} />
           )}
-          <Text style={{ color: token.colorText }}>
+          <Text className="hide-on-mobile" style={{ color: token.colorText }}>
             {user?.displayName || user?.email}
           </Text>
           <Button
@@ -246,8 +246,9 @@ export function Dashboard() {
             icon={<LogoutOutlined />}
             onClick={logout}
             style={{ color: token.colorTextSecondary }}
+            className="mobile-icon-only"
           >
-            Sign Out
+            <span className="hide-on-mobile">Sign Out</span>
           </Button>
         </Space>
       </Header>

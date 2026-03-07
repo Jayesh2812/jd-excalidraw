@@ -14,7 +14,6 @@ import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { SaveVersionButton } from './VersionHistory'
-import { convertElementColorsForPreview } from '../utils/colorUtils'
 import { compressSvg } from '../utils/svgUtils'
 
 // Lazy load VersionHistory sidebar (only shown when opened)
@@ -96,21 +95,26 @@ export function CanvasEditor() {
       const allElements = api.getSceneElements()
       const elements = allElements.filter((el: any) => !el.isDeleted)
       const files = api.getFiles()
+      const theme = api.getAppState().theme
       
       // Skip preview generation if canvas is empty
       if (!elements || elements.length === 0) return null
 
       // Convert dark colors to light for preview visibility
-      const previewElements = elements.map(convertElementColorsForPreview)
+      const previewElements = elements
 
       const svg = await exportToSvg({
+        theme: 'dark',
         elements: previewElements,
         appState: {
           exportBackground: false,
           exportPadding: 10,
+          exportWithDarkMode: theme === 'dark',
         },
         files,
       })
+
+      console.log('svg', svg, theme)
 
       // Serialize and compress SVG
       const svgString = new XMLSerializer().serializeToString(svg)

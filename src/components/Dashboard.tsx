@@ -39,7 +39,6 @@ import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { Logo } from './Logo'
 import { TiltCard } from './TiltCard'
-import { convertElementColorsForPreview } from '../utils/colorUtils'
 import { compressSvg } from '../utils/svgUtils'
 
 const { Header, Content } = Layout
@@ -84,7 +83,7 @@ export function Dashboard() {
       setGeneratingIds(Array.from(generatingRef.current))
 
       // Convert dark colors to light for preview visibility
-      const previewElements = elements.map(convertElementColorsForPreview)
+      const previewElements = elements
 
       const svg = await exportToSvg({
         elements: previewElements,

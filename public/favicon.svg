@@ -2,15 +2,10 @@
   <!-- Background -->
   <rect width="512" height="512" rx="96" fill="#0a0a0a"/>
   
-  <!-- Open book / M shape -->
+  <!-- M shape with book bottom -->
   <g fill="none" stroke="#ffffff" stroke-width="28" stroke-linecap="round" stroke-linejoin="round">
-    <!-- Left side of M / book spine -->
-    <path d="M140 360 L140 152 L256 232 L372 152 L372 360"/>
-    
-    <!-- Center line (pen/pencil) -->
-    <line x1="256" y1="232" x2="256" y2="360"/>
+    <path d="M140 310 L140 122 L256 202 L372 122 L372 310"/>
+    <line x1="256" y1="202" x2="256" y2="390"/>
+    <path d="M140 312 L256 390 L372 312"/>
   </g>
-  
-  <!-- Pen tip dot -->
-  <circle cx="256" cy="380" r="14" fill="#ffffff"/>
 </svg>

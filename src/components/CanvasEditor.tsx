@@ -8,7 +8,6 @@ import {
   CheckOutlined,
   ForkOutlined,
   WifiOutlined,
-  CloudSyncOutlined,
 } from '@ant-design/icons'
 import { Excalidraw, exportToSvg } from '@excalidraw/excalidraw'
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'

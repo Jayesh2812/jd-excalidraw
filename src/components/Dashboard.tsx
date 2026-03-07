@@ -18,7 +18,6 @@ import {
   Dropdown,
   Badge,
 } from 'antd'
-import type { MenuProps } from 'antd'
 import { ExclamationCircleOutlined } from '@ant-design/icons'
 import {
   PlusOutlined,
@@ -336,30 +335,6 @@ export function Dashboard() {
     : selectedFolderId
       ? canvases.filter(c => c.folderId === selectedFolderId)
       : canvases
-
-  const confirmDeleteCanvas = (canvasId: string, canvasName: string, e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (!user) return
-
-    modal.confirm({
-      title: 'Delete canvas',
-      icon: <ExclamationCircleOutlined />,
-      content: `Are you sure you want to delete "${canvasName}"? This action cannot be undone.`,
-      okText: 'Delete',
-      okType: 'danger',
-      cancelText: 'Cancel',
-      centered: true,
-      onOk: async () => {
-        try {
-          await deleteDoc(doc(db, 'users', user.uid, 'canvases', canvasId))
-          message.success('Canvas deleted')
-        } catch (error) {
-          console.error('Error deleting canvas:', error)
-          message.error('Failed to delete canvas')
-        }
-      },
-    })
-  }
 
   const toggleShare = async (canvas: Canvas, e: React.MouseEvent) => {
     e.stopPropagation()

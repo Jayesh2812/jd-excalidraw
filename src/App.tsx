@@ -4,6 +4,7 @@ import { Button, Typography, Spin, Card, Space } from 'antd'
 import { GoogleOutlined } from '@ant-design/icons'
 import { useAuth } from './AuthContext'
 import { Logo } from './components/Logo'
+import { AnimatedBackground } from './components/AnimatedBackground'
 import './App.css'
 
 // Lazy load heavy components for code splitting
@@ -19,6 +20,7 @@ function LoginPage() {
 
   return (
     <div className="login-page">
+      <AnimatedBackground />
       <Card className="login-page__card">
         <Space direction="vertical" size="large" align="center" style={{ width: '100%' }}>
           <Logo size={48} />

@@ -4,12 +4,15 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #0a0a0a;
+  background: transparent;
   padding: 16px;
+  position: relative;
+  z-index: 1;
 }
 
 .login-page__card {
-  background: #141414 !important;
+  background: rgba(20, 20, 20, 0.8) !important;
+  backdrop-filter: blur(10px);
   border: 1px solid #303030 !important;
   padding: 24px;
   min-width: 320px;
@@ -22,7 +25,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #0a0a0a;
+  background: transparent;
+  position: relative;
+  z-index: 1;
 }
 
 /* Mobile responsive */

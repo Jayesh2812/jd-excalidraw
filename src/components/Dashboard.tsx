@@ -54,6 +54,7 @@ import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { Logo } from './Logo'
 import { TiltCard } from './TiltCard'
+import { AnimatedBackground } from './AnimatedBackground'
 import { compressSvg } from '../utils/svgUtils'
 import { useOfflineSync } from '../hooks/useOfflineSync'
 import {
@@ -287,29 +288,80 @@ export function Dashboard() {
   const deleteFolder = async (folderId: string, folderName: string) => {
     if (!user) return
 
+    const folderCanvases = canvases.filter(c => c.folderId === folderId)
+    const canvasCount = folderCanvases.length
+
+    if (canvasCount === 0) {
+      // No canvases, just delete the folder
+      modal.confirm({
+        title: 'Delete folder',
+        icon: <ExclamationCircleOutlined />,
+        content: `Delete "${folderName}"?`,
+        okText: 'Delete',
+        okType: 'danger',
+        cancelText: 'Cancel',
+        centered: true,
+        onOk: async () => {
+          try {
+            await deleteDoc(doc(db, 'users', user.uid, 'folders', folderId))
+            if (selectedFolderId === folderId) {
+              setSelectedFolderId(null)
+            }
+            message.success('Folder deleted')
+          } catch (error) {
+            console.error('Error deleting folder:', error)
+            message.error('Failed to delete folder')
+          }
+        },
+      })
+      return
+    }
+
+    // Has canvases, ask what to do with them
     modal.confirm({
       title: 'Delete folder',
       icon: <ExclamationCircleOutlined />,
-      content: `Delete "${folderName}"? Canvases in this folder will be moved to "All Canvases".`,
-      okText: 'Delete',
+      content: (
+        <div>
+          <p>Delete "{folderName}"?</p>
+          <p style={{ marginTop: 8, color: 'rgba(255,255,255,0.65)' }}>
+            This folder contains {canvasCount} canvas{canvasCount > 1 ? 'es' : ''}.
+          </p>
+        </div>
+      ),
+      okText: 'Delete folder & canvases',
       okType: 'danger',
-      cancelText: 'Cancel',
+      cancelText: 'Keep canvases',
       centered: true,
       onOk: async () => {
+        // Delete canvases and folder
         try {
-          // Move canvases to root
-          const folderCanvases = canvases.filter(c => c.folderId === folderId)
+          for (const canvas of folderCanvases) {
+            await deleteDoc(doc(db, 'users', user.uid, 'canvases', canvas.id))
+          }
+          await deleteDoc(doc(db, 'users', user.uid, 'folders', folderId))
+          if (selectedFolderId === folderId) {
+            setSelectedFolderId(null)
+          }
+          message.success('Folder and canvases deleted')
+        } catch (error) {
+          console.error('Error deleting folder:', error)
+          message.error('Failed to delete folder')
+        }
+      },
+      onCancel: async () => {
+        // Move canvases to root and delete folder
+        try {
           for (const canvas of folderCanvases) {
             await updateDoc(doc(db, 'users', user.uid, 'canvases', canvas.id), {
               folderId: null,
             })
           }
-          // Delete folder
           await deleteDoc(doc(db, 'users', user.uid, 'folders', folderId))
           if (selectedFolderId === folderId) {
             setSelectedFolderId(null)
           }
-          message.success('Folder deleted')
+          message.success('Folder deleted, canvases moved to All Canvases')
         } catch (error) {
           console.error('Error deleting folder:', error)
           message.error('Failed to delete folder')
@@ -400,7 +452,8 @@ export function Dashboard() {
   }
 
   return (
-    <Layout style={{ minHeight: '100vh', background: token.colorBgLayout }}>
+    <Layout style={{ minHeight: '100vh', background: 'transparent', position: 'relative', zIndex: 1 }}>
+      <AnimatedBackground />
       <Header
         style={{
           background: token.colorBgContainer,
@@ -551,7 +604,8 @@ export function Dashboard() {
                         e.stopPropagation()
                         deleteFolder(folder.id, folder.name)
                       }}
-                      style={{ marginLeft: 4, color: token.colorTextTertiary }}
+                      danger
+                      style={{ marginLeft: 4 }}
                     />
                   </Space>
                 ),
@@ -572,7 +626,7 @@ export function Dashboard() {
                 hoverable={!isModalOpen}
                 onClick={!isModalOpen ? openCreateModal : undefined}
                 style={{
-                  background: isModalOpen ? token.colorBgContainer : 'transparent',
+                  background: token.colorBgContainer,
                   borderColor: token.colorBorder,
                   borderStyle: isModalOpen ? 'solid' : 'dashed',
                 }}
@@ -583,7 +637,7 @@ export function Dashboard() {
                   <div
                     style={{
                       height: 120,
-                      background: isModalOpen ? token.colorBgElevated : 'transparent',
+                      background: token.colorBgElevated,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',

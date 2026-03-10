@@ -38,6 +38,7 @@ import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { Logo } from './Logo'
 import { TiltCard } from './TiltCard'
+import { AnimatedBackground } from './AnimatedBackground'
 
 const { Header, Content } = Layout
 const { Title, Text } = Typography
@@ -175,11 +176,12 @@ export function SharedGallery() {
   }
 
   return (
-    <Layout style={{ minHeight: '100vh', background: token.colorBgLayout }}>
+    <Layout style={{ minHeight: '100vh', background: 'transparent', position: 'relative' }}>
+      <AnimatedBackground />
       <Header
         style={{
-          background: token.colorBgContainer,
-          borderBottom: `1px solid ${token.colorBorder}`,
+          background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.08) 0%, rgba(20, 20, 20, 0.95) 50%, rgba(20, 20, 20, 0.98) 100%)',
+          borderBottom: `1px solid rgba(168, 85, 247, 0.15)`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -187,6 +189,7 @@ export function SharedGallery() {
           position: 'sticky',
           top: 0,
           zIndex: 100,
+          backdropFilter: 'blur(8px)',
         }}
       >
         <Space>
@@ -205,7 +208,7 @@ export function SharedGallery() {
         </Button>
       </Header>
 
-      <Content style={{ padding: '24px', maxWidth: 1200, margin: '0 auto', width: '100%' }}>
+      <Content style={{ padding: '24px', maxWidth: 1200, margin: '0 auto', width: '100%', position: 'relative', zIndex: 1 }}>
         <div style={{ marginBottom: 24 }}>
           <Title level={3} style={{ color: token.colorText, margin: 0 }}>
             Shared Gallery
